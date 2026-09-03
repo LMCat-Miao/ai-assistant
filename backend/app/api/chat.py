@@ -28,6 +28,8 @@ def chat(
     """
 
     return StreamingResponse(
-        chat_with_ai_stream(data.message),
+        chat_with_ai_stream(
+            [message.model_dump() for message in data.messages]
+        ),
         media_type="text/plain"
     )

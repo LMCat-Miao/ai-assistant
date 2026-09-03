@@ -21,24 +21,20 @@ client = OpenAI(
 )
 
 
-def chat_with_ai(message: str) -> str:
+def chat_with_ai(messages: list[dict]) -> str:
     """
     普通 AI 对话
     """
     response = client.chat.completions.create(
         model=AI_MODEL,
-        messages=[
-            {
-                "role": "user",
-                "content": message,
-            }
-        ],
+        messages=messages,
+        
     )
 
     return response.choices[0].message.content or ""
 
 
-def chat_with_ai_stream(message: str):
+def chat_with_ai_stream(messages: list[dict]):
     """
     AI 流式对话
 
@@ -48,12 +44,7 @@ def chat_with_ai_stream(message: str):
 
     response = client.chat.completions.create(
         model=AI_MODEL,
-        messages=[
-            {
-                "role": "user",
-                "content": message,
-            }
-        ],
+        messages=messages,
         stream=True,
     )
 

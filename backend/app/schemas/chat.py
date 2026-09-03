@@ -9,9 +9,8 @@
 from pydantic import BaseModel
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
 class ChatRequest(BaseModel):
-    """
-    用户聊天请求。
-    """
-
-    message: str
+    messages: list[ChatMessage]

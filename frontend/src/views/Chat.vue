@@ -72,7 +72,7 @@ const handleSend = async () => {
         },
 
         body: JSON.stringify({
-          message: userMessage,
+          messages: messages.value,
         }),
       }
     )
