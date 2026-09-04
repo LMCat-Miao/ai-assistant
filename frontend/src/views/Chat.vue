@@ -61,6 +61,15 @@ const handleSend = async () => {
   loading.value = true
 
   try {
+    const MAX_CONTEXT_MESSAGES = 20
+
+    const chatMessages = messages.value
+      .slice(-MAX_CONTEXT_MESSAGES)
+      .map((item) => ({
+        role: item.role,
+        content: item.content,
+      }))
+
     const response = await fetch(
       'http://127.0.0.1:8000/api/chat/stream',
       {
@@ -72,7 +81,7 @@ const handleSend = async () => {
         },
 
         body: JSON.stringify({
-          messages: messages.value,
+          messages: chatMessages,
         }),
       }
     )
