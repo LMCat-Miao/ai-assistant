@@ -1,6 +1,7 @@
 from app.services.context_manager import (
     calculate_messages_tokens,
     trim_messages_by_tokens,
+    MAX_INPUT_TOKENS,
 )
 
 
@@ -50,7 +51,8 @@ print()
 print("原始 Token：", original_tokens)
 
 
-max_tokens = 30
+max_tokens = MAX_INPUT_TOKENS
+
 
 trimmed_messages = trim_messages_by_tokens(
     messages,

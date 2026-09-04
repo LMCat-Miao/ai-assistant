@@ -5,8 +5,13 @@ from app.services.tokenizer_service import count_chat_tokens
 
 
 class ChatMessage(TypedDict):
-    role: Literal["user", "assistant"]
+    role: Literal["system", "user", "assistant"]
     content: str
+
+MODEL_CONTEXT_WINDOW = 8000
+MAX_OUTPUT_TOKENS = 2000
+MAX_INPUT_TOKENS = (MODEL_CONTEXT_WINDOW 
+                    - MAX_OUTPUT_TOKENS)
 
 
 def calculate_messages_tokens(
@@ -18,12 +23,12 @@ def calculate_messages_tokens(
 
     return count_chat_tokens(messages)
 
-DEFAULT_CONTEXT_TOKEN_BUDGET = 6000
 
 def trim_messages_by_tokens(
     messages: list[ChatMessage],
-    max_tokens: int = DEFAULT_CONTEXT_TOKEN_BUDGET,
+    max_tokens: int = MAX_INPUT_TOKENS,
 ) -> list[ChatMessage]:
+    
     """
     根据 Token 预算裁剪历史消息。
 
@@ -32,18 +37,28 @@ def trim_messages_by_tokens(
     """
 
     messages = messages.copy()
-
-    while (
-        len(messages) > 1
-        and calculate_messages_tokens(messages) > max_tokens
+    system_messages =[
+        message 
+        for message in messages
+        if(message["role"] == "system")
+    ]
+    conversation_messages = [
+        message
+        for message in messages
+        if(message["role"] != "system")
+    ]
+    while(
+        conversation_messages 
+        and calculate_messages_tokens(
+            system_messages + conversation_messages
+        ) > max_tokens
     ):
-        if (
-            len(messages) >= 2
-            and messages[0]["role"] == "user"
-            and messages[1]["role"] == "assistant"
+        if(
+            len(conversation_messages) > 2
+            and conversation_messages[0]["role"] == "user"
+            and conversation_messages[1]["role"] == "assistant"
         ):
-            del messages[:2]
+            del conversation_messages[:2]
         else:
-            messages.pop(0)
-
-    return messages
+            conversation_messages.pop(0)
+    return system_messages + conversation_messages
