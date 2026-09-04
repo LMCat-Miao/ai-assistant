@@ -1,29 +1,26 @@
 from typing import TypedDict
+
 from app.services.tokenizer_service import count_tokens
+
 
 class ChatMessage(TypedDict):
     role: str
     content: str
 
 
-def estimate_tokens(text: str) -> int:
-    """
-    估算文本的 Token 数量。
-    """
-    return count_tokens(text)
-
-
 def calculate_messages_tokens(
     messages: list[ChatMessage],
 ) -> int:
     """
-    计算整个消息列表的 Token 数量。
+    计算消息内容的 Token 数量。
     """
 
     total_tokens = 0
 
     for message in messages:
-        total_tokens += count_tokens(message["content"])
+        total_tokens += count_tokens(
+            message["content"]
+        )
 
     return total_tokens
 
