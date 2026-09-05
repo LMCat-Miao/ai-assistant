@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from app.api.dependencies import get_current_user
 from app.schemas.chat import ChatRequest
 from app.services.ai_service import chat_with_ai_stream
-
+from app.services.context_builder import build_context
 
 router = APIRouter(
     prefix="/api/chat",
@@ -13,23 +13,30 @@ router = APIRouter(
 
 
 @router.post("/stream")
-def chat(
+def chat_stream(
     data: ChatRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    AI 聊天接口。
+    messages = [
+        message.model_dump()
+        for message in data.messages
+    ]
 
-    当前版本：
-    - 需要登录
-    - 接收用户消息
-    - 调用 AI
-    - 返回流式回答
-    """
+    context = build_context(messages)
+
+    print("\n" + "=" * 60)
+    print("最终发送给 AI 的 Context")
+    print("=" * 60)
+
+    for message in context:
+        print(
+            f"{message['role']}: "
+            f"{message['content']}"
+        )
+
+    print("=" * 60)
 
     return StreamingResponse(
-        chat_with_ai_stream(
-            [message.model_dump() for message in data.messages]
-        ),
-        media_type="text/plain"
+        chat_with_ai_stream(context),
+        media_type="text/plain",
     )
