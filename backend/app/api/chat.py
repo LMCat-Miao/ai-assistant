@@ -58,10 +58,17 @@ def chat_stream(
     # - 超出预算时删除旧对话
     # ========================================================
 
-    context = build_context(
-        messages
+    print("\n" + "=" * 60)
+    print("前端发送过来的完整 messages")
+    print("=" * 60)
+
+    for message in messages:
+        print(
+        f"{message['role']}: "
+        f"{message['content']}"
     )
 
+    context = build_context(messages)
     # ========================================================
     # 3. 开发阶段打印最终 Context
     #

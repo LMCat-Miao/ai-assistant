@@ -70,6 +70,9 @@ const handleSend = async () => {
         content: item.content,
       }))
 
+      console.log('准备发送给后端的 messages：')
+      console.log(messages.value)
+
     const response = await fetch(
       'http://127.0.0.1:8000/api/chat/stream',
       {
