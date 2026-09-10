@@ -3,9 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import router as auth_router
 from app.api.user import router as user_router
 from app.api.chat import router as chat_router
+from app.database_init import init_database
 app = FastAPI(
     title="AI Learning Assistant ",
 )
+
+#初始化数据库
+init_database()
 
 app.include_router(auth_router)
 app.include_router(user_router)
