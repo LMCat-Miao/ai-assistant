@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends,HTTPException
 from app.api.dependencies import get_current_user
 from app.respositories.conversation_repository import (
-    create_conversation)
+    create_conversation,get_conversation,get_conversations_by_user)
+from app.respositories.message_reponsitory import(
+    get_messages_by_conversation
+)
 router = APIRouter(
     prefix="/conversations",
     tags=["会话管理"],
@@ -26,4 +29,36 @@ def create_new_conversation(
             "title": "新会话"
         }
     }
-    
+@router.get("/{conversation_id}/messages")
+def get_conversation_messages(
+    conversation_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    获取当前用户某个会话的全部消息。
+    """
+
+    user_id = int(current_user["user_id"])
+
+    # 第一步：确认这个会话属于当前用户
+    conversation = get_conversation(
+        conversation_id=conversation_id,
+        user_id=user_id,
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="会话不存在",
+        )
+
+    # 第二步：获取这个会话的消息
+    messages = get_messages_by_conversation(
+        conversation_id=conversation_id,
+    )
+
+    return {
+        "code": 200,
+        "message": "获取消息成功",
+        "data": messages,
+    }
