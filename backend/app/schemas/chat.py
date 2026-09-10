@@ -6,11 +6,13 @@
 2. 让 FastAPI 自动进行请求参数校验
 """
 
+from typing import Literal
 from pydantic import BaseModel
 
-
 class ChatMessage(BaseModel):
-    role: str
+    role: Literal["user", "assistant"]
     content: str
+
 class ChatRequest(BaseModel):
-    messages: list[ChatMessage]
+    conversation_id: int
+    message: str

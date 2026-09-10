@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends,HTTPException
 from app.api.dependencies import get_current_user
-from app.respositories.conversation_repository import (
+from app.repositories.conversation_repository import (
     create_conversation,get_conversation,get_conversations_by_user)
-from app.respositories.message_reponsitory import(
+from app.repositories.message_reponsitory import(
     get_messages_by_conversation
 )
 router = APIRouter(
@@ -61,4 +61,23 @@ def get_conversation_messages(
         "code": 200,
         "message": "获取消息成功",
         "data": messages,
+    }
+@router.get("")
+def get_user_conversations(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    获取当前登录用户的全部会话。
+    """
+
+    user_id = int(current_user["user_id"])
+
+    conversations = get_conversations_by_user(
+        user_id=user_id,
+    )
+
+    return {
+        "code": 200,
+        "message": "获取会话列表成功",
+        "data": conversations,
     }

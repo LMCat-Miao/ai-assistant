@@ -1,10 +1,16 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import get_current_user
 from app.schemas.chat import ChatRequest
 from app.services.ai_service import chat_with_ai_stream
 from app.services.context_builder import build_context
+
+from app.repositories.conversation_repository import get_conversation
+from app.repositories.message_reponsitory import (
+    create_message,
+    get_messages_by_conversation,
+)
 
 
 router = APIRouter(
@@ -18,80 +24,103 @@ def chat_stream(
     data: ChatRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    AI 流式聊天接口。
+    # ============================================================
+    # 1. 获取当前登录用户 ID
+    # ============================================================
 
-    请求流程：
+    user_id = int(current_user["user_id"])
 
-    前端 messages
-        ↓
-    Pydantic 校验
-        ↓
-    转换成普通 dict
-        ↓
-    Context Builder
-        ↓
-    Token Budget 管理
-        ↓
-    AI
-        ↓
-    StreamingResponse
-    """
+    # ============================================================
+    # 2. 检查会话是否存在，并且属于当前用户
+    # ============================================================
 
-    # ========================================================
-    # 1. 将 Pydantic Message 转成普通 dict
-    # ========================================================
-
-    messages = [
-        message.model_dump()
-        for message in data.messages
-    ]
-
-    # ========================================================
-    # 2. 构建最终 Context
-    #
-    # 这里会：
-    #
-    # - 加入 System Prompt
-    # - 计算 Chat Template Token
-    # - 检查 Token Budget
-    # - 超出预算时删除旧对话
-    # ========================================================
-
-    print("\n" + "=" * 60)
-    print("前端发送过来的完整 messages")
-    print("=" * 60)
-
-    for message in messages:
-        print(
-        f"{message['role']}: "
-        f"{message['content']}"
+    conversation = get_conversation(
+        conversation_id=data.conversation_id,
+        user_id=user_id,
     )
 
-    context = build_context(messages)
-    # ========================================================
-    # 3. 开发阶段打印最终 Context
-    #
-    # 用来确认真正发送给 AI 的内容
-    # ========================================================
-
-    print("\n" + "=" * 60)
-    print("最终发送给 AI 的 Context")
-    print("=" * 60)
-
-    for message in context:
-        print(
-            f"{message['role']}: "
-            f"{message['content']}"
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="会话不存在",
         )
 
-    print("=" * 60)
+    # ============================================================
+    # 3. 保存用户刚刚发送的消息
+    # ============================================================
 
-    # ========================================================
-    # 4. 调用 AI 流式生成
-    # ========================================================
+    create_message(
+        conversation_id=data.conversation_id,
+        role="user",
+        content=data.message,
+    )
+
+    # ============================================================
+    # 4. 从数据库查询这个会话的历史消息
+    # ============================================================
+
+    db_messages = get_messages_by_conversation(
+        conversation_id=data.conversation_id,
+    )
+
+    # ============================================================
+    # 5. 转换成 Context Manager 需要的格式
+    # ============================================================
+
+    messages = [
+        {
+            "role": message["role"],
+            "content": message["content"],
+        }
+        for message in db_messages
+    ]
+
+    # ============================================================
+    # 6. 构建最终发送给 AI 的 Context
+    # ============================================================
+
+    context = build_context(messages)
+
+    # ============================================================
+    # 7. 定义 AI 流式生成器
+    # ============================================================
+
+    def generate():
+        assistant_content = ""
+
+        try:
+            for chunk in chat_with_ai_stream(context):
+                # ------------------------------------------------
+                # 累积 AI 输出
+                # ------------------------------------------------
+
+                assistant_content += chunk
+
+                # ------------------------------------------------
+                # 立即把 chunk 返回给前端
+                # ------------------------------------------------
+
+                yield chunk
+
+            # ====================================================
+            # 8. AI 完整回答结束后，再保存 assistant 消息
+            # ====================================================
+
+            create_message(
+                conversation_id=data.conversation_id,
+                role="assistant",
+                content=assistant_content,
+            )
+
+        except Exception:
+            # 第一版暂时不保存异常情况下的半截回答
+            raise
+
+    # ============================================================
+    # 9. 返回 StreamingResponse
+    # ============================================================
 
     return StreamingResponse(
-        chat_with_ai_stream(context),
+        generate(),
         media_type="text/plain",
     )
