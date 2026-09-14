@@ -8,6 +8,7 @@
 
 from typing import Literal
 from pydantic import BaseModel
+from app.services.chat_service import stream_chat
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]

@@ -35,6 +35,8 @@ def create_message(
 
     finally:
         db.close()
+
+
 def get_messages_by_conversation(
     conversation_id: int,
 ):
