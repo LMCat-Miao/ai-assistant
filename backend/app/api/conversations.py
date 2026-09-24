@@ -1,14 +1,21 @@
-from fastapi import APIRouter, Depends,HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from app.api.dependencies import get_current_user
 from app.repositories.conversation_repository import (
-    create_conversation,get_conversation,get_conversations_by_user)
-from app.repositories.message_reponsitory import(
-    get_messages_by_conversation
+    create_conversation,
+    get_conversation,
+    get_conversations_by_user,
+    delete_conversation,
 )
+from app.repositories.message_reponsitory import (
+    get_messages_by_conversation,
+)
+
 router = APIRouter(
     prefix="/conversations",
     tags=["会话管理"],
 )
+
+
 @router.post("/")
 def create_new_conversation(
     current_user: dict = Depends(get_current_user),
@@ -22,13 +29,15 @@ def create_new_conversation(
         title="新会话",
     )
     return {
-        "code":200,
-        "message":"创建会话成功",
-        "data":{
+        "code": 200,
+        "message": "创建会话成功",
+        "data": {
             "conversation_id": conversation_id,
-            "title": "新会话"
-        }
+            "title": "新会话",
+        },
     }
+
+
 @router.get("/{conversation_id}/messages")
 def get_conversation_messages(
     conversation_id: int,
@@ -62,6 +71,39 @@ def get_conversation_messages(
         "message": "获取消息成功",
         "data": messages,
     }
+
+
+@router.delete("/{conversation_id}")
+def delete_user_conversation(
+    conversation_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    删除当前用户的指定会话，并清理关联消息。
+
+    路径：DELETE /conversations/{conversation_id}
+    """
+
+    user_id = int(current_user["user_id"])
+
+    deleted = delete_conversation(
+        conversation_id=conversation_id,
+        user_id=user_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="会话不存在",
+        )
+
+    return {
+        "code": 200,
+        "message": "删除会话成功",
+        "data": None,
+    }
+
+
 @router.get("")
 def get_user_conversations(
     current_user: dict = Depends(get_current_user),

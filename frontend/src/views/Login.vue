@@ -37,8 +37,8 @@ const handleLogin = async () => {
     // ⑤ 保存用户信息到 Pinia
     userStore.setUserInfo(userRes.data.data)
 
-    // ⑥ 登录完成，进入 Home
-    router.push('/home')
+    // ⑥ 登录完成，进入聊天工作台
+    router.push('/chat')
 
   } catch (error) {
 

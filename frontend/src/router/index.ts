@@ -8,7 +8,7 @@ const router = createRouter({
     routes: [
     {
         path:'/',
-        redirect:'/home',
+        redirect:'/chat',
     },
     {
       path: '/login',
@@ -43,7 +43,7 @@ router.beforeEach((to) => {
 
   // ② 已经登录，却访问登录页
   if (to.path === '/login' && userStore.isLogin) {
-    return '/home'
+    return '/chat'
   }
 
   // ③ 其他情况正常放行

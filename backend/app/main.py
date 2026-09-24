@@ -27,6 +27,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # 允许前端读取流式响应里的会话标题头
+    expose_headers=["X-Conversation-Title"],
 )
 app.include_router(auth_router)
 

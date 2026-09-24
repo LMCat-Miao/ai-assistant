@@ -36,10 +36,10 @@ def chat_with_ai(messages: list[dict]) -> str:
 
 def chat_with_ai_stream(messages: list[dict]):
     """
-    AI 流式对话
+    AI 流式对话。
 
-    AI 每生成一部分内容，
-    就通过 yield 返回一部分。
+    只负责与大模型 API 通信；
+    业务落库、会话校验由 chat_service 处理。
     """
 
     response = client.chat.completions.create(

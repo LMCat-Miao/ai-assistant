@@ -2,6 +2,19 @@ import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 import router from '@/router'
 
+/**
+ * 后端统一响应结构：
+ * { code, message, data }
+ *
+ * Axios 拦截器返回的是完整 AxiosResponse，
+ * 因此业务数据在 response.data.data。
+ */
+export interface ApiResponse<T> {
+  code: number
+  message: string
+  data: T
+}
+
 const request = axios.create({
   baseURL: 'http://127.0.0.1:8000',
   timeout: 10000,
@@ -42,7 +55,7 @@ request.interceptors.response.use(
 
       const userStore = useUserStore()
 
-      // 清除登录状态
+      // 清除登录状态（内部会同步清理会话 Store）
       userStore.logout()
 
       // 跳转登录页面
