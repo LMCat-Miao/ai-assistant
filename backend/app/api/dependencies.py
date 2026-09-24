@@ -8,7 +8,7 @@ security = HTTPBearer()
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     token = credentials.credentials
 
@@ -20,10 +20,11 @@ def get_current_user(
     if username is None or user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token 中缺少用户信息"
+            detail="Token 中缺少用户信息",
         )
 
     return {
-        "user_id": user_id,
-        "username": username
+        # 统一为字符串，与前端 ownerUserId / JWT sub 比较兼容
+        "user_id": str(user_id),
+        "username": username,
     }
