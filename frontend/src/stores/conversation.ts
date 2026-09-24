@@ -9,6 +9,10 @@ import {
 } from '@/api/conversation'
 import { getMessages, type Message } from '@/api/message'
 import { useUserStore } from '@/stores/user'
+import {
+  CONVERSATION_PERSIST_KEY,
+  conversationPersistStorage,
+} from '@/stores/conversationPersist'
 
 /**
  * 从 Axios 完整响应中安全取出业务 data。
@@ -62,6 +66,12 @@ export const useConversationStore = defineStore(
      */
     let messagesRequestSerial = 0
 
+    /**
+     * 会话「世代」：logout/reset 时递增。
+     * 进行中的流式回调若世代不匹配，则丢弃，避免写回旧状态。
+     */
+    const sessionGeneration = ref(0)
+
     /** 把当前登录用户记为会话归属，配合持久化防串号 */
     const bindOwnerToCurrentUser = () => {
       const userStore = useUserStore()
@@ -70,15 +80,21 @@ export const useConversationStore = defineStore(
         uid === undefined || uid === null ? null : String(uid)
     }
 
+    /** 未登录时禁止再改会话相关状态（防退出后异步回调污染） */
+    const canMutateSession = (): boolean => {
+      return !!useUserStore().token
+    }
+
     // ==================================================
     // Actions
     // ==================================================
 
     /**
      * 清空会话相关状态（退出登录时调用）。
-     * 会同步清掉持久化的 currentConversationId / ownerUserId。
+     * 递增 sessionGeneration，作废进行中的异步写回。
      */
     const reset = () => {
+      sessionGeneration.value += 1
       conversations.value = []
       currentConversationId.value = null
       ownerUserId.value = null
@@ -320,6 +336,10 @@ export const useConversationStore = defineStore(
       conversationId: number,
       title: string,
     ) => {
+      if (!canMutateSession()) {
+        return
+      }
+
       const trimmed = title.trim()
       if (!trimmed) {
         return
@@ -334,7 +354,6 @@ export const useConversationStore = defineStore(
 
       target.title = trimmed
 
-      // 标题更新后将该会话移到列表前部（与后端更新 updated_at 的语义一致）
       conversations.value = [
         target,
         ...conversations.value.filter((item) => item.id !== conversationId),
@@ -342,13 +361,17 @@ export const useConversationStore = defineStore(
     }
 
     const appendMessage = (message: Message) => {
+      if (!canMutateSession()) {
+        return
+      }
       messages.value.push(message)
     }
 
-    /**
-     * 流式拼接时只更新「当前会话」的最后一条消息，降低串会话风险。
-     */
     const updateLastMessageContent = (content: string) => {
+      if (!canMutateSession()) {
+        return
+      }
+
       const last = messages.value[messages.value.length - 1]
       if (
         last &&
@@ -368,6 +391,7 @@ export const useConversationStore = defineStore(
       messagesLoading,
       error,
       deleting,
+      sessionGeneration,
 
       reset,
       fetchConversations,
@@ -382,11 +406,10 @@ export const useConversationStore = defineStore(
     }
   },
   {
-    // 只持久化当前会话 ID 与归属用户，不持久化 messages
-    // 显式 key，与 user.logout 里 localStorage.removeItem 对齐
     persist: {
-      key: 'conversation',
+      key: CONVERSATION_PERSIST_KEY,
       pick: ['currentConversationId', 'ownerUserId'],
+      storage: conversationPersistStorage,
     },
   },
 )

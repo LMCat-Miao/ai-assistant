@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { clearConversationSessionSync } from '@/stores/clearConversationSession'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -19,22 +20,14 @@ export const useUserStore = defineStore('user', {
       this.userInfo = userInfo
     },
 
+    /**
+     * 退出登录：同步清认证 + 会话内存/持久化，再由页面跳转登录页。
+     * 不再使用动态 import，避免 reset 晚于 removeItem 后又被 persist 写回。
+     */
     logout() {
       this.token = ''
       this.userInfo = null
-
-      // 同步清除 conversation Store 的持久化，避免异步 reset 尚未完成时
-      // 刷新/再登录读到上一用户的 currentConversationId
-      try {
-        localStorage.removeItem('conversation')
-      } catch {
-        // 忽略隐私模式等导致的 storage 异常
-      }
-
-      // 再异步 reset 内存中的 Store（避免与 request.ts 顶层循环依赖）
-      void import('@/stores/conversation').then(({ useConversationStore }) => {
-        useConversationStore().reset()
-      })
+      clearConversationSessionSync()
     },
   },
   persist: true,

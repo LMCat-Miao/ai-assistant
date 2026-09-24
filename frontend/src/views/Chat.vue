@@ -101,6 +101,7 @@ const buildLocalMessage = (
 })
 
 const handleLogout = () => {
+  // logout 内同步清空会话内存 + Local Storage，再跳转
   userStore.logout()
   router.push('/login')
 }
@@ -189,6 +190,9 @@ const handleSend = async (preset?: string) => {
   streaming.value = true
   stickToBottom.value = true
 
+  // 捕获发送时的世代；退出登录后回调不得再写 Store
+  const generationAtSend = conversationStore.sessionGeneration
+
   try {
     let conversationId = conversationStore.currentConversationId
 
@@ -213,12 +217,17 @@ const handleSend = async (preset?: string) => {
       text,
       userStore.token,
       async (chunk) => {
+        if (conversationStore.sessionGeneration !== generationAtSend) {
+          return
+        }
         assistantContent += chunk
         conversationStore.updateLastMessageContent(assistantContent)
         await scrollToBottom(false)
       },
       (title) => {
-        // 响应头到达即表示后端已持久化标题；立即同步侧栏
+        if (conversationStore.sessionGeneration !== generationAtSend) {
+          return
+        }
         conversationStore.updateConversationTitleLocally(
           conversationId,
           title,
@@ -226,12 +235,20 @@ const handleSend = async (preset?: string) => {
       },
     )
 
+    if (conversationStore.sessionGeneration !== generationAtSend) {
+      return
+    }
+
     if (!assistantContent.trim()) {
       conversationStore.updateLastMessageContent(
         '（模型未返回内容，请稍后重试）',
       )
     }
   } catch (error) {
+    if (conversationStore.sessionGeneration !== generationAtSend) {
+      return
+    }
+
     console.error('AI 流式请求失败：', error)
 
     const tip =
@@ -239,7 +256,6 @@ const handleSend = async (preset?: string) => {
         ? error.message
         : '抱歉，AI 请求失败，请稍后重试。'
 
-    // 若已有空的 assistant 占位，写入错误；否则追加一条
     const last = conversationStore.messages[conversationStore.messages.length - 1]
     if (last?.role === 'assistant' && !last.content) {
       conversationStore.updateLastMessageContent(`请求失败：${tip}`)
@@ -256,7 +272,9 @@ const handleSend = async (preset?: string) => {
     ElMessage.error(tip)
   } finally {
     streaming.value = false
-    await scrollToBottom(false)
+    if (conversationStore.sessionGeneration === generationAtSend) {
+      await scrollToBottom(false)
+    }
   }
 }
 
