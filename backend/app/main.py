@@ -9,6 +9,7 @@ from app.database_init import init_database
 app = FastAPI(
     title="AI Learning Assistant ",
 )
+from app.api.knowledge import router as knowledge_router
 
 #初始化数据库
 init_database()
@@ -30,7 +31,7 @@ app.add_middleware(
     # 允许前端读取流式响应里的会话标题头
     expose_headers=["X-Conversation-Title"],
 )
-app.include_router(auth_router)
+app.include_router(knowledge_router)
 
 @app.get("/")
 def root():
