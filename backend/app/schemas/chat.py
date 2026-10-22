@@ -28,3 +28,14 @@ class ChatRequest(BaseModel):
 
     conversation_id: int = Field(..., gt=0, description="会话 ID")
     message: str = Field(..., min_length=1, description="当前用户消息")
+    # 允许前端指定是否使用知识库检索
+    use_knowledge: bool = Field(
+        default=False,
+        description="是否使用知识库检索",
+    )
+    # 允许前端指定知识库检索的pdf文件名
+
+    knowledge_filename: str | None = Field(
+        default=None,
+        description="可选，指定知识库检索的 PDF 文件名",
+    )

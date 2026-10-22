@@ -57,6 +57,8 @@ def chat_stream(
             conversation_id=data.conversation_id,
             user_id=user_id,
             message=data.message,
+            use_knowledge=data.use_knowledge,
+            knowledge_filename=data.knowledge_filename
         )
     except ConversationNotFoundError as exc:
         raise HTTPException(

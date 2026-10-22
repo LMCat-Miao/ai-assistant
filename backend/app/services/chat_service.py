@@ -23,7 +23,7 @@ from app.repositories.message_reponsitory import (
 from app.services.ai_service import chat_with_ai_stream
 from app.services.context_builder import build_context
 from app.services.context_manager import ChatMessage
-
+from app.services.rag_retrieval_service import retrieve_knowledge
 
 class ConversationNotFoundError(Exception):
     """会话不存在，或不属于当前用户。"""
@@ -121,6 +121,8 @@ def prepare_chat_context(
     conversation_id: int,
     user_id: int,
     message: str,
+    use_knowledge: bool=False,
+    knowledge_filename: str | None=None,
 ) -> PrepareChatResult:
     """
     同步准备一次聊天所需的模型上下文。
@@ -191,10 +193,58 @@ def prepare_chat_context(
         for item in history
     ]
 
+   
+    # 默认不检索知识库，保持原有普通聊天行为。
+    knowledge_context: str | None = None
+
+    if use_knowledge:
+        try:
+            # user_id 来自后端 JWT 认证，不接受前端自行指定的用户 ID。
+            retrieved_chunks = retrieve_knowledge(
+                query=content,
+                user_id=str(user_id),
+                top_k=3,
+                filename=knowledge_filename,
+            )
+
+            if retrieved_chunks:
+                # 将检索结果整理为包含来源和页码的文本。
+                context_parts: list[str] = []
+
+                for index, chunk in enumerate(retrieved_chunks, start=1):
+                    source = chunk.get("source") or "未知文件"
+                    page = chunk.get("page")
+
+                    # 页码缺失时，不虚构页码。
+                    page_label = f"第 {page} 页" if page is not None else "页码未知"
+
+                    context_parts.append(
+                        f"[参考资料 {index}]\n"
+                        f"来源：{source}，{page_label}\n"
+                        f"内容：\n{chunk['content']}"
+                    )
+
+                knowledge_context = "\n\n".join(context_parts)
+
+            else:
+                # 没有召回结果时明确告知模型，不要假装找到资料。
+                knowledge_context = (
+                    "本次知识库检索没有找到相关资料。"
+                    "请明确告知用户资料不足，不要声称引用了 PDF 内容。"
+                )
+
+        except Exception as exc:
+            raise ChatPreparationError("知识库检索失败") from exc
+
     try:
-        context = build_context(messages)
+        # 有知识库上下文时启用 RAG，否则仍然按普通聊天构建。
+        context = build_context(
+            messages,
+            knowledge_context=knowledge_context,
+        )
     except Exception as exc:
-        raise ChatPreparationError("构建对话上下文失败") from exc
+        raise ChatPreparationError("上下文构建失败") from exc
+
 
     return PrepareChatResult(
         context=context,

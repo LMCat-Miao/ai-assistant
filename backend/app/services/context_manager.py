@@ -18,13 +18,13 @@ class ChatMessage(TypedDict):
 
 # 为了方便测试，当前故意设置得比较小。
 # 以后接入真实模型时，需要根据模型实际上下文窗口调整。
-MODEL_CONTEXT_WINDOW = 200
+MODEL_CONTEXT_WINDOW = 33000
 
 # 给 AI 输出预留的 Token
-MAX_OUTPUT_TOKENS = 50
+MAX_OUTPUT_TOKENS = 2050
 
 # 安全余量
-SAFETY_MARGIN = 10
+SAFETY_MARGIN = 1000
 
 # 真正允许输入的 Token 数量
 MAX_INPUT_TOKENS = (
@@ -89,14 +89,13 @@ def truncate_message_to_budget(
     # --------------------------------------------------------
 
     if system_tokens >= max_tokens:
-        print(
-            "❌ System Prompt 本身已经超过 Token Budget"
-        )
-
-        return {
-            **message,
-            "content": "",
-        }
+    # 系统消息本身已超预算时，不能静默清空用户问题。
+    # 抛出异常，让上层明确报告上下文预算错误。
+        raise ValueError(
+        f"系统消息已超出输入预算："
+        f"system_tokens={system_tokens}, "
+        f"max_tokens={max_tokens}"
+    )
 
     # --------------------------------------------------------
     # 二分搜索
