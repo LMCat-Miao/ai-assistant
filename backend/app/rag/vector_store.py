@@ -1,4 +1,3 @@
-
 from pathlib import Path
 from typing import Any
 
@@ -21,18 +20,26 @@ COLLECTION_NAME = "ai_learning_knowledge"
 class VectorStore:
     """封装 Chroma 向量数据库的存储与检索操作。"""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        persist_directory: str | Path | None = None,
+        collection_name: str | None = None,
+    ) -> None:
+        # 允许测试注入临时目录 / 独立 collection，避免污染真实用户数据。
+        chroma_dir = Path(persist_directory) if persist_directory else CHROMA_DIR
+        name = collection_name or COLLECTION_NAME
+
         # 创建数据库目录，目录已存在时不会报错。
-        CHROMA_DIR.mkdir(parents=True, exist_ok=True)
+        chroma_dir.mkdir(parents=True, exist_ok=True)
 
         # 创建连接本地持久化数据库的客户端。
         self.client = chromadb.PersistentClient(
-            path=str(CHROMA_DIR)
+            path=str(chroma_dir)
         )
 
         # 获取已有集合；不存在时才创建。
         self.collection = self.client.get_or_create_collection(
-            name=COLLECTION_NAME,
+            name=name,
             metadata={"description": "AI 学习助手知识库"},
         )
 
@@ -64,6 +71,35 @@ class VectorStore:
             embeddings=embeddings,
             metadatas=metadatas,
         )
+
+    def get_chunks(
+        self,
+        where: dict[str, Any] | None = None,
+        include: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """按元数据条件读取记录，供清理旧版本等业务使用。"""
+
+        options: dict[str, Any] = {
+            "include": include or ["metadatas", "documents"],
+        }
+        if where is not None:
+            options["where"] = where
+
+        result = self.collection.get(**options)
+        return {
+            "ids": list(result.get("ids") or []),
+            "documents": list(result.get("documents") or []),
+            "metadatas": list(result.get("metadatas") or []),
+        }
+
+    def delete_by_ids(self, ids: list[str]) -> int:
+        """仅按明确的 ID 列表删除，避免宽泛 where 误删。"""
+
+        if not ids:
+            return 0
+
+        self.collection.delete(ids=ids)
+        return len(ids)
 
     def search(
         self,

@@ -21,15 +21,24 @@ client = OpenAI(
 )
 
 
-def chat_with_ai(messages: list[dict]) -> str:
+def chat_with_ai(
+    messages: list[dict],
+    timeout: float | None = None,
+) -> str:
     """
-    普通 AI 对话
+    普通 AI 对话。
+
+    timeout:
+        可选，单次模型调用超时秒数；默认不额外限制（沿用客户端默认行为）。
     """
-    response = client.chat.completions.create(
-        model=AI_MODEL,
-        messages=messages,
-        
-    )
+    create_options: dict = {
+        "model": AI_MODEL,
+        "messages": messages,
+    }
+    if timeout is not None:
+        create_options["timeout"] = timeout
+
+    response = client.chat.completions.create(**create_options)
 
     return response.choices[0].message.content or ""
 
