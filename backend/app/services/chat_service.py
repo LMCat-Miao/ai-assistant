@@ -10,7 +10,7 @@
 """
 
 from collections.abc import Generator
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from app.repositories.conversation_repository import (
     get_conversation,
@@ -23,6 +23,10 @@ from app.repositories.message_reponsitory import (
 from app.services.ai_service import chat_with_ai_stream
 from app.services.context_builder import build_context
 from app.services.context_manager import ChatMessage
+from app.services.rag_citations import (
+    KnowledgeStatus,
+    build_citations_from_chunks,
+)
 from app.services.rag_retrieval_service import retrieve_knowledge
 
 class ConversationNotFoundError(Exception):
@@ -50,6 +54,10 @@ class PrepareChatResult(NamedTuple):
     context: list[ChatMessage]
     # 本次若新生成了标题则返回，否则为 None（供响应头带回前端）
     generated_title: str | None
+    # 来自检索的参考来源（非模型编造）；普通聊天为空列表
+    citations: list[dict[str, Any]]
+    # none=未启用知识库；hit=有检索命中；empty=启用但无命中
+    knowledge_status: KnowledgeStatus
 
 
 def is_default_title(title: str | None) -> bool:
@@ -196,6 +204,8 @@ def prepare_chat_context(
    
     # 默认不检索知识库，保持原有普通聊天行为。
     knowledge_context: str | None = None
+    citations: list[dict[str, Any]] = []
+    knowledge_status: KnowledgeStatus = "none"
 
     if use_knowledge:
         try:
@@ -208,6 +218,9 @@ def prepare_chat_context(
             )
 
             if retrieved_chunks:
+                knowledge_status = "hit"
+                citations = build_citations_from_chunks(retrieved_chunks)
+
                 # 将检索结果整理为包含来源和页码的文本。
                 context_parts: list[str] = []
 
@@ -227,10 +240,13 @@ def prepare_chat_context(
                 knowledge_context = "\n\n".join(context_parts)
 
             else:
+                knowledge_status = "empty"
+                citations = []
                 # 没有召回结果时明确告知模型，不要假装找到资料。
                 knowledge_context = (
                     "本次知识库检索没有找到相关资料。"
-                    "请明确告知用户资料不足，不要声称引用了 PDF 内容。"
+                    "请明确告知用户资料不足，不要声称引用了 PDF 内容，"
+                    "也不要编造文件名或页码。"
                 )
 
         except Exception as exc:
@@ -249,15 +265,20 @@ def prepare_chat_context(
     return PrepareChatResult(
         context=context,
         generated_title=generated_title,
+        citations=citations,
+        knowledge_status=knowledge_status,
     )
 
 
 def generate_assistant_reply(
     conversation_id: int,
     context: list[ChatMessage],
+    citations: list[dict[str, Any]] | None = None,
 ) -> Generator[str, None, None]:
     """
     流式生成 AI 回复，并在「完整成功」后写入数据库。
+
+    citations 仅保存检索到的参考来源，不表示逐句证据对齐结果。
     """
 
     assistant_content = ""
@@ -282,6 +303,7 @@ def generate_assistant_reply(
                 conversation_id=conversation_id,
                 role="assistant",
                 content=assistant_content,
+                citations=citations or None,
             )
         except Exception as exc:
             raise ChatGenerationError("保存 AI 回复失败") from exc
@@ -303,4 +325,5 @@ def stream_chat(
     yield from generate_assistant_reply(
         conversation_id=conversation_id,
         context=prepared.context,
+        citations=prepared.citations,
     )

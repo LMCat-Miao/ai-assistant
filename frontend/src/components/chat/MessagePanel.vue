@@ -72,6 +72,43 @@ const examples = [
             v-html="renderMarkdown(item.content)"
           />
           <div v-else class="plain-text">{{ item.content }}</div>
+
+          <div
+            v-if="item.role === 'assistant' && item.knowledgeStatus === 'empty'"
+            class="knowledge-empty-tip"
+          >
+            知识库未检索到相关资料。以下回答未引用 PDF；请勿将其视为文档原文。
+          </div>
+
+          <aside
+            v-if="
+              item.role === 'assistant' &&
+                item.citations &&
+                item.citations.length > 0
+            "
+            class="citations"
+          >
+            <div class="citations-title">
+              检索到的参考来源
+              <span class="citations-note">（系统检索结果，非逐句核验）</span>
+            </div>
+            <ul class="citations-list">
+              <li
+                v-for="(cite, index) in item.citations"
+                :key="`${cite.filename}-${cite.page}-${index}`"
+              >
+                <strong>{{ cite.filename }}</strong>
+                <span v-if="cite.page != null"> · 第 {{ cite.page }} 页</span>
+                <span v-else> · 页码未知</span>
+                <p
+                  v-if="cite.snippet"
+                  class="citation-snippet"
+                >
+                  {{ cite.snippet }}
+                </p>
+              </li>
+            </ul>
+          </aside>
         </div>
       </article>
 
@@ -190,6 +227,51 @@ const examples = [
 
 .plain-text {
   white-space: pre-wrap;
+}
+
+.knowledge-empty-tip {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.citations {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--chat-border);
+}
+
+.citations-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--chat-muted);
+  margin-bottom: 6px;
+}
+
+.citations-note {
+  font-weight: 400;
+  color: #9ca3af;
+}
+
+.citations-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--chat-text);
+}
+
+.citation-snippet {
+  margin: 4px 0 0;
+  color: var(--chat-muted);
+  line-height: 1.45;
 }
 
 .markdown-body :deep(p) {

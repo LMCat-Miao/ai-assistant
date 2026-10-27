@@ -61,6 +61,12 @@ export const useConversationStore = defineStore(
     const deleting = ref(false)
 
     /**
+     * 流式生成期间锁定：禁止切换 / 新建 / 删除会话。
+     * 由 Chat.vue 在生成开始前设为 true，在 finally 中恢复。
+     */
+    const interactionLocked = ref(false)
+
+    /**
      * 用于避免快速切换会话时的竞态：
      * 较晚发起的 loadMessages 才能更新 messages。
      */
@@ -71,6 +77,9 @@ export const useConversationStore = defineStore(
      * 进行中的流式回调若世代不匹配，则丢弃，避免写回旧状态。
      */
     const sessionGeneration = ref(0)
+
+    const STREAMING_LOCK_MESSAGE =
+      '请等待当前回答生成完成后再操作会话'
 
     /** 把当前登录用户记为会话归属，配合持久化防串号 */
     const bindOwnerToCurrentUser = () => {
@@ -103,7 +112,18 @@ export const useConversationStore = defineStore(
       messagesLoading.value = false
       error.value = null
       deleting.value = false
+      interactionLocked.value = false
       messagesRequestSerial += 1
+    }
+
+    const setInteractionLocked = (locked: boolean) => {
+      interactionLocked.value = locked
+    }
+
+    const assertInteractionAllowed = () => {
+      if (interactionLocked.value) {
+        throw new Error(STREAMING_LOCK_MESSAGE)
+      }
     }
 
     /**
@@ -196,6 +216,7 @@ export const useConversationStore = defineStore(
     const createNewConversation = async (
       title?: string,
     ): Promise<Conversation> => {
+      assertInteractionAllowed()
       error.value = null
 
       try {
@@ -267,6 +288,7 @@ export const useConversationStore = defineStore(
     }
 
     const selectConversation = async (id: number): Promise<void> => {
+      assertInteractionAllowed()
       currentConversationId.value = id
       bindOwnerToCurrentUser()
       messages.value = []
@@ -279,6 +301,7 @@ export const useConversationStore = defineStore(
         return
       }
 
+      assertInteractionAllowed()
       deleting.value = true
       error.value = null
 
@@ -382,6 +405,27 @@ export const useConversationStore = defineStore(
       }
     }
 
+    const updateLastMessageCitations = (
+      citations: Message['citations'],
+      knowledgeStatus?: Message['knowledgeStatus'],
+    ) => {
+      if (!canMutateSession()) {
+        return
+      }
+
+      const last = messages.value[messages.value.length - 1]
+      if (
+        last &&
+        currentConversationId.value !== null &&
+        last.conversation_id === currentConversationId.value
+      ) {
+        last.citations = citations ?? null
+        if (knowledgeStatus !== undefined) {
+          last.knowledgeStatus = knowledgeStatus
+        }
+      }
+    }
+
     return {
       conversations,
       currentConversationId,
@@ -391,9 +435,11 @@ export const useConversationStore = defineStore(
       messagesLoading,
       error,
       deleting,
+      interactionLocked,
       sessionGeneration,
 
       reset,
+      setInteractionLocked,
       fetchConversations,
       restoreOrSelectDefault,
       createNewConversation,
@@ -403,6 +449,7 @@ export const useConversationStore = defineStore(
       updateConversationTitleLocally,
       appendMessage,
       updateLastMessageContent,
+      updateLastMessageCitations,
     }
   },
   {

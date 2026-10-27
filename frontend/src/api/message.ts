@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/utils/request'
+import type { KnowledgeCitation } from '@/api/chat'
 
 /**
  * 单条聊天消息（与后端 messages 表字段对齐）
@@ -10,6 +11,10 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string
   created_at: string
+  /** 检索到的参考来源；普通聊天或旧数据为 null/undefined */
+  citations?: KnowledgeCitation[] | null
+  /** 前端临时：知识库状态提示（empty 时展示资料不足） */
+  knowledgeStatus?: 'none' | 'hit' | 'empty'
 }
 
 /**

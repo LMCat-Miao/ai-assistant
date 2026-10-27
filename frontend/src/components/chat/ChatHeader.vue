@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 顶部栏：产品名、当前会话标题、用户信息、退出登录。
+ * 顶部栏：产品名、页面导航、当前标题、用户信息、退出登录。
  * 认证逻辑复用 userStore.logout，不在此重复实现。
  */
 defineProps<{
@@ -22,6 +22,23 @@ const emit = defineEmits<{
         <span class="session-title">{{ conversationTitle }}</span>
       </div>
     </div>
+
+    <nav class="header-nav" aria-label="主导航">
+      <RouterLink
+        class="nav-link"
+        to="/chat"
+        active-class="active"
+      >
+        对话
+      </RouterLink>
+      <RouterLink
+        class="nav-link"
+        to="/knowledge"
+        active-class="active"
+      >
+        知识库
+      </RouterLink>
+    </nav>
 
     <div class="header-actions">
       <div class="user-chip" :title="username">
@@ -86,11 +103,39 @@ const emit = defineEmits<{
   max-width: 360px;
 }
 
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.nav-link {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--chat-muted);
+  text-decoration: none;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.nav-link:hover {
+  color: var(--chat-text);
+  background: #f3f4f6;
+}
+
+.nav-link.active {
+  color: var(--chat-accent);
+  background: var(--chat-accent-soft);
+  font-weight: 600;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .user-chip {

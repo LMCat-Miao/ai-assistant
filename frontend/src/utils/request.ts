@@ -27,13 +27,9 @@ request.interceptors.request.use(
 
     const token = userStore.token
 
-    console.log('请求拦截器拿到的 Token:', token)
-
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-
-    console.log('最终请求头:', config.headers)
 
     return config
   },
@@ -51,8 +47,6 @@ request.interceptors.response.use(
 
   async (error) => {
     if (error.response?.status === 401) {
-      console.log('Token 已失效，需要重新登录')
-
       const userStore = useUserStore()
 
       // 清除登录状态（内部会同步清理会话 Store）

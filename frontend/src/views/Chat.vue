@@ -15,6 +15,10 @@ import MessagePanel from '@/components/chat/MessagePanel.vue'
 import ChatComposer from '@/components/chat/ChatComposer.vue'
 
 import { streamChat } from '@/api/chat'
+import {
+  getKnowledgeDocuments,
+  type KnowledgeDocument,
+} from '@/api/knowledge'
 import type { Message } from '@/api/message'
 import { useConversationStore } from '@/stores/conversation'
 import { useUserStore } from '@/stores/user'
@@ -26,6 +30,12 @@ const conversationStore = useConversationStore()
 const draft = ref('')
 const streaming = ref(false)
 const creating = ref(false)
+
+/** 知识库开关默认关闭，保持原有普通聊天行为 */
+const useKnowledge = ref(false)
+const knowledgeFilename = ref('')
+const knowledgeDocuments = ref<KnowledgeDocument[]>([])
+const knowledgeDocumentsLoading = ref(false)
 
 /** 消息滚动容器 */
 const scrollContainer = ref<HTMLElement | null>(null)
@@ -107,7 +117,12 @@ const handleLogout = () => {
 }
 
 const handleCreate = async () => {
-  if (creating.value || streaming.value) {
+  if (creating.value) {
+    return
+  }
+
+  if (streaming.value || conversationStore.interactionLocked) {
+    ElMessage.warning('请等待当前回答生成完成后再新建会话')
     return
   }
 
@@ -118,15 +133,19 @@ const handleCreate = async () => {
     stickToBottom.value = true
     await scrollToBottom(true)
     ElMessage.success('已创建新对话')
-  } catch {
-    ElMessage.error(conversationStore.error || '创建会话失败')
+  } catch (error) {
+    ElMessage.error(
+      error instanceof Error
+        ? error.message
+        : conversationStore.error || '创建会话失败',
+    )
   } finally {
     creating.value = false
   }
 }
 
 const handleSelect = async (id: number) => {
-  if (streaming.value) {
+  if (streaming.value || conversationStore.interactionLocked) {
     ElMessage.warning('请等待当前回答生成完成后再切换会话')
     return
   }
@@ -139,13 +158,22 @@ const handleSelect = async (id: number) => {
     await conversationStore.selectConversation(id)
     stickToBottom.value = true
     await scrollToBottom(true)
-  } catch {
-    ElMessage.error(conversationStore.error || '切换会话失败')
+  } catch (error) {
+    ElMessage.error(
+      error instanceof Error
+        ? error.message
+        : conversationStore.error || '切换会话失败',
+    )
   }
 }
 
 const handleRemove = async (id: number) => {
-  if (conversationStore.deleting || streaming.value) {
+  if (conversationStore.deleting) {
+    return
+  }
+
+  if (streaming.value || conversationStore.interactionLocked) {
+    ElMessage.warning('请等待当前回答生成完成后再删除会话')
     return
   }
 
@@ -173,33 +201,74 @@ const handleRemove = async (id: number) => {
   }
 }
 
+const loadKnowledgeDocuments = async () => {
+  knowledgeDocumentsLoading.value = true
+  try {
+    const response = await getKnowledgeDocuments()
+    knowledgeDocuments.value = response.data.data.documents ?? []
+
+    // 若当前选中的文件已不在可选列表中，清空选择
+    const stillValid = knowledgeDocuments.value.some(
+      (item) =>
+        item.filename === knowledgeFilename.value && !item.version_conflict,
+    )
+    if (knowledgeFilename.value && !stillValid) {
+      knowledgeFilename.value = ''
+    }
+  } catch {
+    knowledgeDocuments.value = []
+    // 不阻断聊天；开启知识库时 Composer 会提示无文档
+  } finally {
+    knowledgeDocumentsLoading.value = false
+  }
+}
+
 /**
  * 发送消息：
  * 1. 若无当前会话则先创建
  * 2. 本地追加 user / assistant 占位
- * 3. 只把 conversation_id + message 交给流式接口
+ * 3. 将发送瞬间的 use_knowledge / knowledge_filename 固定进本次请求
  */
 const handleSend = async (preset?: string) => {
   const text = (preset ?? draft.value).trim()
 
-  if (!text || streaming.value) {
+  // 生成中禁止再次发送，避免并行多个流式请求
+  if (!text || streaming.value || conversationStore.interactionLocked) {
     return
   }
 
+  // 固定本次请求参数，避免发送后切换开关影响进行中的请求
+  const requestUseKnowledge = useKnowledge.value === true
+  const requestKnowledgeFilename = knowledgeFilename.value.trim()
+
+  if (requestUseKnowledge && knowledgeDocuments.value.length === 0) {
+    ElMessage.warning(
+      '已启用知识库，但当前没有可用文档。请先到「知识库」上传 PDF，或关闭开关后再发送。',
+    )
+  }
+
   draft.value = ''
-  streaming.value = true
   stickToBottom.value = true
 
   // 捕获发送时的世代；退出登录后回调不得再写 Store
   const generationAtSend = conversationStore.sessionGeneration
 
   try {
+    // 先确保会话存在，再进入 streaming 锁定，避免「生成中新建」与锁冲突
     let conversationId = conversationStore.currentConversationId
 
     if (conversationId === null) {
-      const created = await conversationStore.createNewConversation()
-      conversationId = created.id
+      creating.value = true
+      try {
+        const created = await conversationStore.createNewConversation()
+        conversationId = created.id
+      } finally {
+        creating.value = false
+      }
     }
+
+    streaming.value = true
+    conversationStore.setInteractionLocked(true)
 
     conversationStore.appendMessage(
       buildLocalMessage('user', text, conversationId),
@@ -212,11 +281,13 @@ const handleSend = async (preset?: string) => {
 
     let assistantContent = ''
 
-    await streamChat(
+    await streamChat({
       conversationId,
-      text,
-      userStore.token,
-      async (chunk) => {
+      message: text,
+      token: userStore.token,
+      useKnowledge: requestUseKnowledge,
+      knowledgeFilename: requestKnowledgeFilename || null,
+      onChunk: async (chunk) => {
         if (conversationStore.sessionGeneration !== generationAtSend) {
           return
         }
@@ -224,7 +295,7 @@ const handleSend = async (preset?: string) => {
         conversationStore.updateLastMessageContent(assistantContent)
         await scrollToBottom(false)
       },
-      (title) => {
+      onTitle: (title) => {
         if (conversationStore.sessionGeneration !== generationAtSend) {
           return
         }
@@ -233,7 +304,13 @@ const handleSend = async (preset?: string) => {
           title,
         )
       },
-    )
+      onCitations: (citations, status) => {
+        if (conversationStore.sessionGeneration !== generationAtSend) {
+          return
+        }
+        conversationStore.updateLastMessageCitations(citations, status)
+      },
+    })
 
     if (conversationStore.sessionGeneration !== generationAtSend) {
       return
@@ -271,7 +348,9 @@ const handleSend = async (preset?: string) => {
 
     ElMessage.error(tip)
   } finally {
+    // 正常结束或异常后都必须解锁，恢复切换/新建/发送
     streaming.value = false
+    conversationStore.setInteractionLocked(false)
     if (conversationStore.sessionGeneration === generationAtSend) {
       await scrollToBottom(false)
     }
@@ -283,6 +362,9 @@ const handleExample = (text: string) => {
 }
 
 onMounted(async () => {
+  // 文档列表与会话列表并行加载；失败不阻断聊天
+  void loadKnowledgeDocuments()
+
   try {
     // 1. 拉取当前用户会话列表（失败则不要继续恢复选中态）
     await conversationStore.fetchConversations()
@@ -315,6 +397,7 @@ onMounted(async () => {
         :current-id="conversationStore.currentConversationId"
         :loading="conversationStore.conversationsLoading"
         :deleting="conversationStore.deleting"
+        :locked="streaming || conversationStore.interactionLocked"
         @create="handleCreate"
         @select="handleSelect"
         @remove="handleRemove"
@@ -337,8 +420,12 @@ onMounted(async () => {
 
         <ChatComposer
           v-model="draft"
+          v-model:use-knowledge="useKnowledge"
+          v-model:knowledge-filename="knowledgeFilename"
           :disabled="creating"
           :streaming="streaming"
+          :documents="knowledgeDocuments"
+          :documents-loading="knowledgeDocumentsLoading"
           @send="handleSend()"
         />
       </section>

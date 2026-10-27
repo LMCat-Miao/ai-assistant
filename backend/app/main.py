@@ -28,8 +28,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    # 允许前端读取流式响应里的会话标题头
-    expose_headers=["X-Conversation-Title"],
+    # 允许前端读取流式响应里的会话标题与知识库引用头
+    expose_headers=[
+        "X-Conversation-Title",
+        "X-Knowledge-Citations",
+        "X-Knowledge-Status",
+    ],
 )
 app.include_router(knowledge_router)
 

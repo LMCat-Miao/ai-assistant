@@ -1,0 +1,40 @@
+# 环境变量（保留 *.example）
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Python
+**/venv/
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node / 前端
+**/node_modules/
+**/dist/
+**/dist-ssr/
+*.local
+
+# 本地数据库与向量库（含用户数据，勿入库）
+**/*.db
+**/data/chroma_db/
+
+# 含个人信息或本地上传的 PDF（公开示例可按需 force-add）
+**/experiments/pdfs/resume.pdf
+backend/uploads/
+backend/tmp/
+
+# 日志与本地评测产物
+**/*.log
+**/experiments/rag_eval/output/
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

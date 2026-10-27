@@ -1,0 +1,53 @@
+{
+  "_readme": [
+    "本文件是 RAG 检索测评模板，不是已完成标注的评测集。",
+    "请根据你账号下已入库的真实 PDF，复制为 eval_cases.json 后填写。",
+    "category 建议取值：has_answer | paraphrase | no_answer | weak_related",
+    "没有填写 expected_source，以及 expected_page / expected_evidence 至少其一的样本，",
+    "不会被统计为「已验证命中」（verified_hit）。",
+    "下面示例中的文件名/页码/证据仅为格式示范，请改成你的真实 PDF 内容。"
+  ],
+  "meta": {
+    "suggested_user_id": "1",
+    "suggested_filename_filter": null,
+    "notes": "suggested_user_id 需与上传 PDF 时 JWT 中的用户 ID 一致。"
+  },
+  "cases": [
+    {
+      "id": "ex_has_answer_01",
+      "category": "has_answer",
+      "query": "【请改成】文档中有明确答案的问题，例如某项目名称是什么？",
+      "expected_source": "【请改成真实文件名，如 resume.pdf】",
+      "expected_page": 1,
+      "expected_evidence": "【请改成能在该页原文中找到的短语或句子】",
+      "notes": "有明确答案：预期能在指定来源/页码命中含 expected_evidence 的 chunk。"
+    },
+    {
+      "id": "ex_paraphrase_01",
+      "category": "paraphrase",
+      "query": "【请改成】上一题的同义改写问法",
+      "expected_source": "【请改成与上题相同的真实文件名】",
+      "expected_page": 1,
+      "expected_evidence": "【请改成同一证据短语】",
+      "notes": "同义改写：问法不同，预期证据相同。"
+    },
+    {
+      "id": "ex_no_answer_01",
+      "category": "no_answer",
+      "query": "【请改成】文档中完全没有的信息，例如某公司 2099 年营收是多少？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "无答案：不指望命中证据；请人工判断 Top 结果是否误导。needs_human_review=true。"
+    },
+    {
+      "id": "ex_weak_related_01",
+      "category": "weak_related",
+      "query": "【请改成】主题接近但证据不在文档中的问题",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "弱相关：可能检索到同主题段落，但不构成答案；需人工复核。"
+    }
+  ]
+}

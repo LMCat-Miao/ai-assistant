@@ -30,6 +30,14 @@ const router = createRouter({
         requiresAuth: true,
       },
     },
+
+    {
+      path: '/knowledge',
+      component: () => import('@/views/Knowledge.vue'),
+      meta: {
+        requiresAuth: true,
+      },
+    },
   ],
 })
 

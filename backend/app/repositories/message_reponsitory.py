@@ -1,13 +1,44 @@
+import json
+from typing import Any
+
 from app.database import get_db
+
+
+def _serialize_citations(
+    citations: list[dict[str, Any]] | None,
+) -> str | None:
+    if not citations:
+        return None
+    return json.dumps(citations, ensure_ascii=False)
+
+
+def _parse_citations_json(raw: Any) -> list[dict[str, Any]] | None:
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, list):
+        return raw
+    if not isinstance(raw, str):
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(data, list):
+        return data
+    return None
 
 
 def create_message(
     conversation_id: int,
     role: str,
     content: str,
+    citations: list[dict[str, Any]] | None = None,
 ):
     """
     创建一条聊天消息。
+
+    citations:
+        可选，RAG 检索到来源列表；普通聊天传 None。
     """
 
     db = get_db()
@@ -18,14 +49,16 @@ def create_message(
             INSERT INTO messages (
                 conversation_id,
                 role,
-                content
+                content,
+                citations_json
             )
-            VALUES (?, ?, ?)
+            VALUES (?, ?, ?, ?)
             """,
             (
                 conversation_id,
                 role,
                 content,
+                _serialize_citations(citations),
             ),
         )
 
@@ -57,7 +90,8 @@ def get_messages_by_conversation(
                 conversation_id,
                 role,
                 content,
-                created_at
+                created_at,
+                citations_json
             FROM messages
             WHERE conversation_id = ?
             ORDER BY id ASC
@@ -66,8 +100,15 @@ def get_messages_by_conversation(
         )
 
         rows = cursor.fetchall()
+        messages: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["citations"] = _parse_citations_json(
+                item.pop("citations_json", None)
+            )
+            messages.append(item)
 
-        return [dict(row) for row in rows]
+        return messages
 
     finally:
         db.close()

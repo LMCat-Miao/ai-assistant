@@ -40,6 +40,19 @@ def init_database():
             """
         )
 
+        # 兼容已有库：补充 RAG 引用 JSON 列（可重复执行）。
+        message_columns = {
+            row[1]
+            for row in db.execute("PRAGMA table_info(messages)").fetchall()
+        }
+        if "citations_json" not in message_columns:
+            db.execute(
+                """
+                ALTER TABLE messages
+                ADD COLUMN citations_json TEXT
+                """
+            )
+
         # 用户表：支持重复执行，不破坏已有数据
         db.execute(
             """

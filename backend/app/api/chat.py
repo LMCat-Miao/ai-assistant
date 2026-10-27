@@ -7,9 +7,10 @@
 3. 同步调用 chat_service 完成准备阶段
 4. 将业务异常转换成 HTTP 错误
 5. 返回 StreamingResponse 进行流式输出
-   （若本次生成了会话标题，通过响应头带回，不破坏纯文本流）
+   （标题与知识库引用通过响应头带回，正文仍为纯文本流）
 """
 
+import json
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -33,6 +34,10 @@ router = APIRouter(
 
 # 供前端读取新标题；中文需 URL 编码后放入 Header
 TITLE_HEADER = "X-Conversation-Title"
+# 检索到来源（JSON，URL 编码）；与正文流分离，避免污染回答文本
+CITATIONS_HEADER = "X-Knowledge-Citations"
+# none | hit | empty
+KNOWLEDGE_STATUS_HEADER = "X-Knowledge-Status"
 
 
 @router.post("/stream")
@@ -43,11 +48,11 @@ def chat_stream(
     """
     流式聊天接口。
 
-    请求体：
-    {
-      "conversation_id": 1,
-      "message": "请解释一下 JavaScript 的闭包"
-    }
+    正文：text/plain 增量文本（向后兼容）。
+    响应头（可选）：
+    - X-Conversation-Title
+    - X-Knowledge-Status: none|hit|empty
+    - X-Knowledge-Citations: URL 编码的 JSON 数组
     """
 
     user_id = int(current_user["user_id"])
@@ -71,11 +76,19 @@ def chat_stream(
             detail=str(exc),
         ) from exc
 
-    response_headers: dict[str, str] = {}
+    response_headers: dict[str, str] = {
+        KNOWLEDGE_STATUS_HEADER: prepared.knowledge_status,
+    }
     if prepared.generated_title:
         # 百分号编码，避免中文标题无法放入 HTTP Header
         response_headers[TITLE_HEADER] = quote(
             prepared.generated_title,
+            safe="",
+        )
+
+    if prepared.citations:
+        response_headers[CITATIONS_HEADER] = quote(
+            json.dumps(prepared.citations, ensure_ascii=False),
             safe="",
         )
 
@@ -84,6 +97,7 @@ def chat_stream(
             yield from generate_assistant_reply(
                 conversation_id=data.conversation_id,
                 context=prepared.context,
+                citations=prepared.citations,
             )
         except ChatGenerationError as exc:
             print(f"AI 流式生成失败: {exc}")

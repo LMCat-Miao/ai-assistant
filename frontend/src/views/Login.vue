@@ -27,12 +27,8 @@ const handleLogin = async () => {
     // ③ 保存 Token 到 Pinia
     userStore.setToken(token)
 
-    console.log('Token:', token)
-
     // ④ 获取当前用户信息
     const userRes = await getUserInfo()
-
-    console.log('用户信息:', userRes.data)
 
     // ⑤ 保存用户信息到 Pinia
     userStore.setUserInfo(userRes.data.data)
@@ -40,10 +36,9 @@ const handleLogin = async () => {
     // ⑥ 登录完成，进入聊天工作台
     router.push('/chat')
 
-  } catch (error) {
-
-    console.log('登录失败:', error)
-
+  } catch {
+    // 不输出 Token、密码或响应详情；仅提示失败
+    console.error('登录失败')
   }
 
 }

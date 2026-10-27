@@ -1,4 +1,12 @@
 .env
+.env.*
+!.env.example
 venv/
+.venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*.db
+data/chroma_db/
+experiments/rag_eval/output/
+experiments/pdfs/resume.pdf
+*.log
