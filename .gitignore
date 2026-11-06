@@ -23,6 +23,10 @@
 **/*.db
 **/data/chroma_db/
 
+# Local database and backup data
+backend/backups/
+*.sqlite3
+
 # 含个人信息或本地上传的 PDF（公开示例可按需 force-add）
 **/experiments/pdfs/resume.pdf
 backend/uploads/

@@ -1,7 +1,20 @@
+"""
+消息表 Repository：创建与按会话查询（SQLAlchemy Core + MySQL）。
+
+说明：
+- 本模块按 conversation_id 读写；用户归属校验由调用方
+  （conversations / messages API、chat_service）先执行 get_conversation。
+- citations_json 以文本形式存取（与 MySQL MEDIUMTEXT 一致），不改列类型。
+"""
+
+from __future__ import annotations
+
 import json
 from typing import Any
 
-from app.database import get_db
+from sqlalchemy import text
+
+from app.database import get_connection
 
 
 def _serialize_citations(
@@ -41,33 +54,33 @@ def create_message(
         可选，RAG 检索到来源列表；普通聊天传 None。
     """
 
-    db = get_db()
-
-    try:
-        cursor = db.execute(
-            """
-            INSERT INTO messages (
-                conversation_id,
-                role,
-                content,
-                citations_json
-            )
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                conversation_id,
-                role,
-                content,
-                _serialize_citations(citations),
+    with get_connection() as conn:
+        result = conn.execute(
+            text(
+                """
+                INSERT INTO messages (
+                    conversation_id,
+                    role,
+                    content,
+                    citations_json
+                )
+                VALUES (
+                    :conversation_id,
+                    :role,
+                    :content,
+                    :citations_json
+                )
+                """
             ),
+            {
+                "conversation_id": conversation_id,
+                "role": role,
+                "content": content,
+                "citations_json": _serialize_citations(citations),
+            },
         )
-
-        db.commit()
-
-        return cursor.lastrowid
-
-    finally:
-        db.close()
+        conn.commit()
+        return int(result.lastrowid)
 
 
 def get_messages_by_conversation(
@@ -76,30 +89,29 @@ def get_messages_by_conversation(
     """
     获取指定会话的全部消息。
 
-    按创建时间正序返回，
+    按创建时间正序返回（ORDER BY id ASC），
     保证聊天顺序正确。
     """
 
-    db = get_db()
+    with get_connection() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                    id,
+                    conversation_id,
+                    role,
+                    content,
+                    created_at,
+                    citations_json
+                FROM messages
+                WHERE conversation_id = :conversation_id
+                ORDER BY id ASC
+                """
+            ),
+            {"conversation_id": conversation_id},
+        ).mappings().all()
 
-    try:
-        cursor = db.execute(
-            """
-            SELECT
-                id,
-                conversation_id,
-                role,
-                content,
-                created_at,
-                citations_json
-            FROM messages
-            WHERE conversation_id = ?
-            ORDER BY id ASC
-            """,
-            (conversation_id,),
-        )
-
-        rows = cursor.fetchall()
         messages: list[dict[str, Any]] = []
         for row in rows:
             item = dict(row)
@@ -109,6 +121,3 @@ def get_messages_by_conversation(
             messages.append(item)
 
         return messages
-
-    finally:
-        db.close()

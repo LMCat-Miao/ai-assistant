@@ -1,18 +1,33 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.auth import router as auth_router
 from app.api.user import router as user_router
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
+from app.api.knowledge import router as knowledge_router
+from app.database import dispose_engine
 from app.database_init import init_database
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期：启动时检查 MySQL，关闭时释放连接池。"""
+
+    try:
+        init_database()
+        yield
+    finally:
+        dispose_engine()
+
+
 app = FastAPI(
     title="AI Learning Assistant ",
+    lifespan=lifespan,
 )
-from app.api.knowledge import router as knowledge_router
-
-#初始化数据库
-init_database()
 
 app.include_router(auth_router)
 app.include_router(user_router)
@@ -36,6 +51,7 @@ app.add_middleware(
     ],
 )
 app.include_router(knowledge_router)
+
 
 @app.get("/")
 def root():

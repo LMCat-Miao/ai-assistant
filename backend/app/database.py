@@ -1,8 +1,12 @@
 """
-业务库连接层（MySQL 8.x + SQLAlchemy 2.x Core）。
+业务库连接层（MySQL 8.4 + SQLAlchemy 2.x Core + PyMySQL）。
 
-本模块只负责 Engine / Connection 生命周期，不执行建表或数据迁移。
-Repository 尚未全部改造前，请勿假设旧的 sqlite3 风格 get_db() 仍可用。
+业务数据库已切换到 MySQL；本模块通过 SQLAlchemy 2.x Core 管理
+Engine / Connection 生命周期，PyMySQL 作为 MySQL 驱动。
+不执行建表或数据迁移。
+
+生产代码请使用 get_engine() / get_connection()；
+不要调用已废弃的 get_db()（会主动抛出 RuntimeError）。
 """
 
 from __future__ import annotations
@@ -125,10 +129,11 @@ def dispose_engine() -> None:
 
 def get_db():
     """
-    已废弃：原 sqlite3 连接入口。
+    已废弃：旧 SQLite（sqlite3）访问入口的兼容性保护桩。
 
-    旧 Repository 仍 import 此名时会在调用时报错，避免误连 SQLite。
-    请改为 get_engine() / get_connection()，并用 text() 执行 SQL。
+    - 生产 Repository / 业务代码统一使用 get_connection()（或 get_engine()）。
+    - 新代码不要再调用本函数。
+    - 调用时主动抛出 RuntimeError，避免误用旧 SQLite 连接方式。
     """
 
     raise RuntimeError(

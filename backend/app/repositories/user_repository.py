@@ -1,60 +1,60 @@
 """
-用户表 Repository：查询与创建用户。
+用户表 Repository：查询与创建用户（SQLAlchemy Core + MySQL）。
 """
 
-from app.database import get_db
+from __future__ import annotations
+
+from sqlalchemy import text
+
+from app.database import get_connection
 
 
 def get_user_by_username(username: str) -> dict | None:
     """按用户名查询用户；不存在返回 None。"""
 
-    db = get_db()
+    with get_connection() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT
+                    id,
+                    username,
+                    password_hash,
+                    created_at
+                FROM users
+                WHERE username = :username
+                """
+            ),
+            {"username": username},
+        ).mappings().first()
 
-    try:
-        cursor = db.execute(
-            """
-            SELECT
-                id,
-                username,
-                password_hash,
-                created_at
-            FROM users
-            WHERE username = ?
-            """,
-            (username,),
-        )
-        row = cursor.fetchone()
         if row is None:
             return None
         return dict(row)
-    finally:
-        db.close()
 
 
 def get_user_by_id(user_id: int) -> dict | None:
     """按 ID 查询用户。"""
 
-    db = get_db()
+    with get_connection() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT
+                    id,
+                    username,
+                    password_hash,
+                    created_at
+                FROM users
+                WHERE id = :user_id
+                """
+            ),
+            {"user_id": user_id},
+        ).mappings().first()
 
-    try:
-        cursor = db.execute(
-            """
-            SELECT
-                id,
-                username,
-                password_hash,
-                created_at
-            FROM users
-            WHERE id = ?
-            """,
-            (user_id,),
-        )
-        row = cursor.fetchone()
         if row is None:
             return None
         return dict(row)
-    finally:
-        db.close()
 
 
 def create_user(
@@ -67,29 +67,37 @@ def create_user(
 
     若指定 user_id（如 admin=1），则按固定主键插入；
     否则使用自增 ID。
+    不写入 email（保持 NULL），不修改已有用户。
     """
 
-    db = get_db()
-
-    try:
+    with get_connection() as conn:
         if user_id is not None:
-            cursor = db.execute(
-                """
-                INSERT INTO users (id, username, password_hash)
-                VALUES (?, ?, ?)
-                """,
-                (user_id, username, password_hash),
+            result = conn.execute(
+                text(
+                    """
+                    INSERT INTO users (id, username, password_hash)
+                    VALUES (:id, :username, :password_hash)
+                    """
+                ),
+                {
+                    "id": user_id,
+                    "username": username,
+                    "password_hash": password_hash,
+                },
             )
         else:
-            cursor = db.execute(
-                """
-                INSERT INTO users (username, password_hash)
-                VALUES (?, ?)
-                """,
-                (username, password_hash),
+            result = conn.execute(
+                text(
+                    """
+                    INSERT INTO users (username, password_hash)
+                    VALUES (:username, :password_hash)
+                    """
+                ),
+                {
+                    "username": username,
+                    "password_hash": password_hash,
+                },
             )
 
-        db.commit()
-        return int(cursor.lastrowid)
-    finally:
-        db.close()
+        conn.commit()
+        return int(result.lastrowid)

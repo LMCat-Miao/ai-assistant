@@ -1,4 +1,14 @@
-from app.database import get_db
+"""
+会话表 Repository：创建 / 查询 / 更新 / 删除（SQLAlchemy Core + MySQL）。
+
+所有按会话 id 的读改删均同时校验 user_id，防止跨用户操作。
+"""
+
+from __future__ import annotations
+
+from sqlalchemy import text
+
+from app.database import get_connection, get_engine
 
 
 def create_conversation(
@@ -9,29 +19,27 @@ def create_conversation(
     创建一个新的会话。
     """
 
-    db = get_db()
-
-    try:
-        cursor = db.execute(
-            """
-            INSERT INTO conversations (
-                user_id,
-                title
-            )
-            VALUES (?, ?)
-            """,
-            (
-                user_id,
-                title,
+    with get_connection() as conn:
+        result = conn.execute(
+            text(
+                """
+                INSERT INTO conversations (
+                    user_id,
+                    title
+                )
+                VALUES (
+                    :user_id,
+                    :title
+                )
+                """
             ),
+            {
+                "user_id": user_id,
+                "title": title,
+            },
         )
-
-        db.commit()
-
-        return cursor.lastrowid
-
-    finally:
-        db.close()
+        conn.commit()
+        return int(result.lastrowid)
 
 
 def get_conversations_by_user(
@@ -41,30 +49,25 @@ def get_conversations_by_user(
     获取当前用户的所有会话。
     """
 
-    db = get_db()
-
-    try:
-        cursor = db.execute(
-            """
-            SELECT
-                id,
-                user_id,
-                title,
-                created_at,
-                updated_at
-            FROM conversations
-            WHERE user_id = ?
-            ORDER BY updated_at DESC
-            """,
-            (user_id,),
-        )
-
-        rows = cursor.fetchall()
+    with get_connection() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                    id,
+                    user_id,
+                    title,
+                    created_at,
+                    updated_at
+                FROM conversations
+                WHERE user_id = :user_id
+                ORDER BY updated_at DESC
+                """
+            ),
+            {"user_id": user_id},
+        ).mappings().all()
 
         return [dict(row) for row in rows]
-
-    finally:
-        db.close()
 
 
 def get_conversation(
@@ -75,36 +78,31 @@ def get_conversation(
     获取当前用户指定的会话。
     """
 
-    db = get_db()
-
-    try:
-        cursor = db.execute(
-            """
-            SELECT
-                id,
-                user_id,
-                title,
-                created_at,
-                updated_at
-            FROM conversations
-            WHERE id = ?
-              AND user_id = ?
-            """,
-            (
-                conversation_id,
-                user_id,
+    with get_connection() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT
+                    id,
+                    user_id,
+                    title,
+                    created_at,
+                    updated_at
+                FROM conversations
+                WHERE id = :conversation_id
+                  AND user_id = :user_id
+                """
             ),
-        )
-
-        row = cursor.fetchone()
+            {
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+            },
+        ).mappings().first()
 
         if row is None:
             return None
 
         return dict(row)
-
-    finally:
-        db.close()
 
 
 def delete_conversation(
@@ -126,56 +124,52 @@ def delete_conversation(
         False 会话不存在或不属于该用户
     """
 
-    db = get_db()
-
-    try:
+    with get_engine().begin() as conn:
         # 1. 归属校验（与 get_conversation 一致）
-        cursor = db.execute(
-            """
-            SELECT id
-            FROM conversations
-            WHERE id = ?
-              AND user_id = ?
-            """,
-            (
-                conversation_id,
-                user_id,
+        owned = conn.execute(
+            text(
+                """
+                SELECT id
+                FROM conversations
+                WHERE id = :conversation_id
+                  AND user_id = :user_id
+                """
             ),
-        )
+            {
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+            },
+        ).first()
 
-        if cursor.fetchone() is None:
+        if owned is None:
             return False
 
-        # 2. 先删消息，再删会话（同一事务）
-        db.execute(
-            """
-            DELETE FROM messages
-            WHERE conversation_id = ?
-            """,
-            (conversation_id,),
-        )
-
-        db.execute(
-            """
-            DELETE FROM conversations
-            WHERE id = ?
-              AND user_id = ?
-            """,
-            (
-                conversation_id,
-                user_id,
+        # 2. 先删消息，再删会话（同一事务；begin() 结束时自动提交）
+        conn.execute(
+            text(
+                """
+                DELETE FROM messages
+                WHERE conversation_id = :conversation_id
+                """
             ),
+            {"conversation_id": conversation_id},
         )
 
-        db.commit()
+        conn.execute(
+            text(
+                """
+                DELETE FROM conversations
+                WHERE id = :conversation_id
+                  AND user_id = :user_id
+                """
+            ),
+            {
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+            },
+        )
+
         return True
-
-    except Exception:
-        db.rollback()
-        raise
-
-    finally:
-        db.close()
 
 
 def update_conversation_title(
@@ -191,26 +185,22 @@ def update_conversation_title(
         False 会话不存在或不属于该用户
     """
 
-    db = get_db()
-
-    try:
-        cursor = db.execute(
-            """
-            UPDATE conversations
-            SET title = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-              AND user_id = ?
-            """,
-            (
-                title,
-                conversation_id,
-                user_id,
+    with get_connection() as conn:
+        result = conn.execute(
+            text(
+                """
+                UPDATE conversations
+                SET title = :title,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :conversation_id
+                  AND user_id = :user_id
+                """
             ),
+            {
+                "title": title,
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+            },
         )
-
-        db.commit()
-        return cursor.rowcount > 0
-
-    finally:
-        db.close()
+        conn.commit()
+        return result.rowcount > 0

@@ -1,81 +1,82 @@
-from app.database import get_db
+"""
+应用启动时的数据库安全检查（MySQL）。
+
+不再创建 / 重建表，也不迁移数据。
+仅验证连通性与业务表是否存在，然后执行可重复的 admin 种子逻辑。
+"""
+
+from __future__ import annotations
+
+from sqlalchemy import text
+
+from app.database import get_connection
 from app.services.user_seed import ensure_admin_user
 
 
-def init_database():
+REQUIRED_TABLES = ("users", "conversations", "messages")
+EXPECTED_DATABASE = "ai_assistant"
+
+
+def init_database() -> None:
     """
-    初始化 / 迁移数据库。
+    FastAPI 启动入口（函数名保持不变，供 main.py 调用）。
 
-    全部使用 CREATE TABLE IF NOT EXISTS 与条件种子，
-    可重复执行，不会删除 conversations / messages。
+    1. 检查 MySQL 可连接且当前库为 ai_assistant
+    2. 检查 users / conversations / messages 是否存在（缺失则报错，不建表）
+    3. 调用 ensure_admin_user()（admin 已存在则跳过，不覆盖密码）
     """
 
-    db = get_db()
-
-    try:
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    with get_connection() as conn:
+        current_db = conn.execute(text("SELECT DATABASE()")).scalar_one()
+        if current_db is None or str(current_db) != EXPECTED_DATABASE:
+            raise RuntimeError(
+                "当前连接的数据库不是 "
+                f"{EXPECTED_DATABASE!r}，实际为 {current_db!r}。"
+                "请检查 backend/.env 中的 MYSQL_DATABASE。"
             )
-            """
-        )
 
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                conversation_id INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        print(f"✅ MySQL 连接成功，当前数据库：{current_db}")
 
-                FOREIGN KEY (conversation_id)
-                    REFERENCES conversations(id)
+        existing = {
+            str(row[0])
+            for row in conn.execute(
+                text(
+                    """
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = :schema
+                      AND table_type = 'BASE TABLE'
+                    """
+                ),
+                {"schema": EXPECTED_DATABASE},
             )
-            """
-        )
-
-        # 兼容已有库：补充 RAG 引用 JSON 列（可重复执行）。
-        message_columns = {
-            row[1]
-            for row in db.execute("PRAGMA table_info(messages)").fetchall()
         }
-        if "citations_json" not in message_columns:
-            db.execute(
-                """
-                ALTER TABLE messages
-                ADD COLUMN citations_json TEXT
-                """
+
+        # MySQL information_schema 在部分配置下可能返回大小写不一的表名
+        existing_lower = {name.lower() for name in existing}
+        missing = [
+            name
+            for name in REQUIRED_TABLES
+            if name.lower() not in existing_lower
+        ]
+        if missing:
+            raise RuntimeError(
+                "MySQL 缺少业务表，拒绝启动（不会自动建表）："
+                + ", ".join(missing)
+                + "。请确认已完成建表与数据迁移。"
             )
 
-        # 用户表：支持重复执行，不破坏已有数据
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-            """
+        print(
+            "✅ 数据库 ai_assistant 检查通过；"
+            "users / conversations / messages 表检查通过"
         )
 
-        db.commit()
-
-        print("✅ 数据库初始化成功")
-
-    finally:
-        db.close()
-
-    # 表提交后再做 admin 种子（内部自行开连接）
+    # 表检查通过后再做 admin 种子（内部走 user_repository → MySQL）
     try:
         message = ensure_admin_user()
-        print(f"✅ 用户迁移：{message}")
+        print(f"✅ 用户初始化：{message}")
     except Exception as exc:
-        # 不阻断服务启动，但把问题打出来
-        print(f"⚠️ 用户迁移失败：{exc}")
+        # 明确失败，不静默忽略
+        raise RuntimeError(
+            f"用户种子 ensure_admin_user() 失败：{exc}"
+        ) from exc
