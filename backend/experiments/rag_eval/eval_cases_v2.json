@@ -1,0 +1,301 @@
+{
+  "_readme": [
+    "第二轮 RAG 检索测评集（v2）：在保留 v1 全部 8 条案例基础上扩展。",
+    "有答案证据均来自 experiments/pdfs 下本地 PDF 的 extract_pdf_pages 真实文本，并用规范化空白后的子串核对。",
+    "向量库中另有 python.pdf / vue学习文档.pdf / 实习协议.pdf / 小程序面试.pdf（user_id=1），但项目内无对应本地 PDF，本轮未对其编写有答案案例，避免无法核页。",
+    "多 PDF 评测：请勿传全局 --filename；各有答案/需限定范围的案例使用 filename 字段。",
+    "no_answer / weak_related 不计入 verified 命中率；评测结果中的 Top-K snippet 供人工判断误召回。"
+  ],
+  "meta": {
+    "suggested_user_id": "1",
+    "suggested_filename_filter": null,
+    "notes": "评测用户必须与 PDF 入库时的用户 ID 一致。运行 v2 时不要加 --filename，否则会全局锁死到单一 PDF，覆盖案例级 filename。",
+    "local_pdfs_verified": ["agent.pdf", "resume.pdf"],
+    "chroma_user_1_sources_without_local_pdf": [
+      "python.pdf",
+      "vue学习文档.pdf",
+      "实习协议.pdf",
+      "小程序面试.pdf"
+    ],
+    "composition": {
+      "total_cases": 23,
+      "v1_retained": 8,
+      "v2_added": 15,
+      "has_answer": 9,
+      "paraphrase": 7,
+      "no_answer": 5,
+      "weak_related": 2,
+      "direct_style_ids": [
+        "agent_has_001",
+        "agent_has_002",
+        "agent_has_003",
+        "resume_has_001",
+        "resume_has_002"
+      ],
+      "paraphrase_core_ids": [
+        "agent_para_001",
+        "agent_para_002",
+        "agent_para_003",
+        "agent_para_004",
+        "agent_para_005"
+      ],
+      "cross_pdf_resume_ids": [
+        "resume_has_001",
+        "resume_has_002",
+        "resume_has_003",
+        "resume_para_001",
+        "resume_para_002",
+        "resume_long_001"
+      ],
+      "long_evidence_ids": [
+        "agent_long_001",
+        "agent_long_002",
+        "resume_long_001"
+      ],
+      "no_answer_ids": [
+        "agent_no_001",
+        "agent_no_002",
+        "agent_no_003",
+        "resume_no_001",
+        "resume_no_002"
+      ],
+      "note": "类别有交叉：resume_* 计入跨 PDF；*_long_* 计入 has_answer 与较长证据。resume_has_003 / resume_para_* 用于补足跨 PDF 与改写覆盖。"
+    }
+  },
+  "cases": [
+    {
+      "id": "agent_has_001",
+      "category": "has_answer",
+      "filename": "agent.pdf",
+      "query": "AI Agent 的大脑承担哪些关键任务？",
+      "expected_source": "agent.pdf",
+      "expected_page": 1,
+      "expected_evidence": "信息处理、决策、推理和规划",
+      "notes": "【v1保留】直接询问第 1 页对大脑模块职责的描述。"
+    },
+    {
+      "id": "agent_has_002",
+      "category": "has_answer",
+      "filename": "agent.pdf",
+      "query": "文中列出的两种人机协作范式是什么？",
+      "expected_source": "agent.pdf",
+      "expected_page": 2,
+      "expected_evidence": "执行者范式（instructor-executor paradigm） 和平等伙伴范式（equal partnership paradigm）",
+      "notes": "【v1保留】检验第 2 页具体术语的检索效果。"
+    },
+    {
+      "id": "agent_para_001",
+      "category": "paraphrase",
+      "filename": "agent.pdf",
+      "query": "除了存储记忆和知识，AI Agent 的大脑还负责什么工作？",
+      "expected_source": "agent.pdf",
+      "expected_page": 1,
+      "expected_evidence": "信息处理、决策、推理和规划",
+      "notes": "【v1保留】与 agent_has_001 询问相同证据，但改换问法。"
+    },
+    {
+      "id": "agent_para_002",
+      "category": "paraphrase",
+      "filename": "agent.pdf",
+      "query": "LLM-based Agent 的评估可以从哪些方面展开？",
+      "expected_source": "agent.pdf",
+      "expected_page": 3,
+      "expected_evidence": "效用（utility）、社交性（sociability）、价值观（values）和持续进化能力（ability to continually evolve）",
+      "notes": "【v1保留】检验对评估维度的语义检索。"
+    },
+    {
+      "id": "agent_no_001",
+      "category": "no_answer",
+      "filename": "agent.pdf",
+      "query": "这篇文章推荐使用哪个 Python 开源框架来开发 AI Agent？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "【v1保留】agent.pdf 三页全文未出现具体 Python 开源开发框架名；人工核对提取文本确认。"
+    },
+    {
+      "id": "agent_no_002",
+      "category": "no_answer",
+      "filename": "agent.pdf",
+      "query": "本文使用了多少条训练数据来训练 LLM-based Agent？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "【v1保留】agent.pdf 未提供训练数据条数；人工核对提取文本确认。"
+    },
+    {
+      "id": "agent_weak_001",
+      "category": "weak_related",
+      "filename": "agent.pdf",
+      "query": "Agent 的视觉感知模块具体采用了哪个图像识别模型？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "【v1保留】第 1 页提到视觉等感知模态，但没有给出具体图像识别模型。"
+    },
+    {
+      "id": "agent_weak_002",
+      "category": "weak_related",
+      "filename": "agent.pdf",
+      "query": "LLM-based Agent 的动态扩展具体采用什么调度算法？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "【v1保留】第 3 页提到动态扩展，但给出的文本没有提供具体调度算法。"
+    },
+
+    {
+      "id": "agent_has_003",
+      "category": "has_answer",
+      "filename": "agent.pdf",
+      "query": "感知模块如何扩展 agent 的感知空间？",
+      "expected_source": "agent.pdf",
+      "expected_page": 1,
+      "expected_evidence": "将 agent 的感知空间从纯文本扩展到多模态空间",
+      "notes": "【v2新增·直接提问】第 1 页感知模块职责。"
+    },
+    {
+      "id": "agent_para_003",
+      "category": "paraphrase",
+      "filename": "agent.pdf",
+      "query": "作者说感知能力不再局限于纯文字，具体扩展到了哪些感官类型？",
+      "expected_source": "agent.pdf",
+      "expected_page": 1,
+      "expected_evidence": "涵盖文本、声音、视觉、触觉、嗅觉等多种感官模态",
+      "notes": "【v2新增·语义改写】同页感知模态列举，问法改写。"
+    },
+    {
+      "id": "agent_para_004",
+      "category": "paraphrase",
+      "filename": "agent.pdf",
+      "query": "人机协作场景里，agent 可能遇到哪些方面的限制，才需要讨论协作范式？",
+      "expected_source": "agent.pdf",
+      "expected_page": 2,
+      "expected_evidence": "隐私安全、伦理约束和数据不足",
+      "notes": "【v2新增·语义改写】围绕局限原因提问，证据在第 2 页。"
+    },
+    {
+      "id": "agent_para_005",
+      "category": "paraphrase",
+      "filename": "agent.pdf",
+      "query": "文末把智能体能力包装成可对外提供的服务时，用的是哪个说法？",
+      "expected_source": "agent.pdf",
+      "expected_page": 3,
+      "expected_evidence": "Agent as a Service（智能体即服务）",
+      "notes": "【v2新增·语义改写】开放问题中的 AaaS 表述。"
+    },
+
+    {
+      "id": "resume_has_001",
+      "category": "has_answer",
+      "filename": "resume.pdf",
+      "query": "这份简历的求职者姓名是什么？",
+      "expected_source": "resume.pdf",
+      "expected_page": 1,
+      "expected_evidence": "姓名：李妙",
+      "notes": "【v2新增·跨PDF】resume.pdf 第 1 页基本信息。"
+    },
+    {
+      "id": "resume_has_002",
+      "category": "has_answer",
+      "filename": "resume.pdf",
+      "query": "求职者的求职意向写的是什么？",
+      "expected_source": "resume.pdf",
+      "expected_page": 1,
+      "expected_evidence": "求职意向：AI 前端开发实习生 / 前端开发实习生（AI 方向）",
+      "notes": "【v2新增·跨PDF】resume.pdf 求职意向原文。"
+    },
+    {
+      "id": "resume_has_003",
+      "category": "has_answer",
+      "filename": "resume.pdf",
+      "query": "简历中医院管理系统项目使用了哪些主要技术栈？",
+      "expected_source": "resume.pdf",
+      "expected_page": 1,
+      "expected_evidence": "Vue3 + ElementPlus + Vite + SpringBoot + MyBatis + MySQL",
+      "notes": "【v2新增·跨PDF】第 1 页项目技术栈。"
+    },
+    {
+      "id": "resume_para_001",
+      "category": "paraphrase",
+      "filename": "resume.pdf",
+      "query": "候选人本科就读于哪所学校、学的是什么专业？",
+      "expected_source": "resume.pdf",
+      "expected_page": 1,
+      "expected_evidence": "哈尔滨师范大学 | 计算机科学与技术专业 | 本科",
+      "notes": "【v2新增·跨PDF·改写】教育背景换问法。"
+    },
+    {
+      "id": "resume_para_002",
+      "category": "paraphrase",
+      "filename": "resume.pdf",
+      "query": "除了 HTML/CSS/JS，简历里前端框架相关写了哪些熟悉内容？",
+      "expected_source": "resume.pdf",
+      "expected_page": 1,
+      "expected_evidence": "熟悉 Vue3 框架及生态",
+      "notes": "【v2新增·跨PDF·改写】专业技能换问法。"
+    },
+
+    {
+      "id": "agent_long_001",
+      "category": "has_answer",
+      "filename": "agent.pdf",
+      "query": "关于评估展望，文中完整列出了哪四个维度？",
+      "expected_source": "agent.pdf",
+      "expected_page": 3,
+      "expected_evidence": "从效用（utility）、社交性（sociability）、价值观（values）和持续进化能力（ability to continually evolve） 四个维度对 LLM-based agent 的评估展望",
+      "notes": "【v2新增·较长证据】要求较长连续证据短语；PDF 内含换行。"
+    },
+    {
+      "id": "agent_long_002",
+      "category": "has_answer",
+      "filename": "agent.pdf",
+      "query": "多智能体无论怎样交互，文中强调它们共同朝向什么？请按原文较长表述回答。",
+      "expected_source": "agent.pdf",
+      "expected_page": 2,
+      "expected_evidence": "无论采用哪种交互模式，agent 都共同朝着一个共享目标努力",
+      "notes": "【v2新增·较长证据】第 2 页完整句级证据。"
+    },
+    {
+      "id": "resume_long_001",
+      "category": "has_answer",
+      "filename": "resume.pdf",
+      "query": "医院管理系统项目中，前端页面开发具体做了哪些事情？请对照简历原文。",
+      "expected_source": "resume.pdf",
+      "expected_page": 1,
+      "expected_evidence": "负责前端页面开发，基于 Vue3 + ElementPlus 构建后台管理界面，实现患者管理、预约挂号等模块",
+      "notes": "【v2新增·跨PDF·较长证据】项目职责较长原文。"
+    },
+
+    {
+      "id": "agent_no_003",
+      "category": "no_answer",
+      "filename": "agent.pdf",
+      "query": "文中披露的 GPT-5 参数量是多少亿？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "【v2新增·无答案】人工核对 agent.pdf 全文：无 GPT-5、无参数量数字。查看 Top-K 是否因 Agent/LLM 关键词误召回。"
+    },
+    {
+      "id": "resume_no_001",
+      "category": "no_answer",
+      "filename": "resume.pdf",
+      "query": "李妙的雅思总分是多少？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "【v2新增·无答案】人工核对 resume.pdf 全文：无“雅思/IELTS/TOEFL”等成绩信息。"
+    },
+    {
+      "id": "resume_no_002",
+      "category": "no_answer",
+      "filename": "resume.pdf",
+      "query": "候选人在字节跳动实习了几个月？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "【v2新增·无答案】人工核对 resume.pdf：无字节跳动或互联网大厂实习经历。"
+    }
+  ]
+}

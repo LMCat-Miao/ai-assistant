@@ -1,0 +1,86 @@
+
+{
+  "_readme": [
+    "第一轮 RAG 检索测评集，依据 agent.pdf 的真实文本人工标注。",
+    "no_answer 和 weak_related 样本用于人工检查误召回，不计入有答案样本的命中率。"
+  ],
+  "meta": {
+    "suggested_user_id": "1",
+    "suggested_filename_filter": "agent.pdf",
+    "notes": "评测用户必须与 PDF 入库时的用户 ID 一致。"
+  },
+  "cases": [
+    {
+      "id": "agent_has_001",
+      "category": "has_answer",
+      "query": "AI Agent 的大脑承担哪些关键任务？",
+      "expected_source": "agent.pdf",
+      "expected_page": 1,
+      "expected_evidence": "信息处理、决策、推理和规划",
+      "notes": "直接询问第 1 页对大脑模块职责的描述。"
+    },
+    {
+      "id": "agent_has_002",
+      "category": "has_answer",
+      "query": "文中列出的两种人机协作范式是什么？",
+      "expected_source": "agent.pdf",
+      "expected_page": 2,
+      "expected_evidence": "执行者范式（instructor-executor paradigm） 和平等伙伴范式（equal partnership paradigm）",
+      "notes": "检验第 2 页具体术语的检索效果。"
+    },
+    {
+      "id": "agent_para_001",
+      "category": "paraphrase",
+      "query": "除了存储记忆和知识，AI Agent 的大脑还负责什么工作？",
+      "expected_source": "agent.pdf",
+      "expected_page": 1,
+      "expected_evidence": "信息处理、决策、推理和规划",
+      "notes": "与 agent_has_001 询问相同证据，但改换问法。"
+    },
+    {
+      "id": "agent_para_002",
+      "category": "paraphrase",
+      "query": "LLM-based Agent 的评估可以从哪些方面展开？",
+      "expected_source": "agent.pdf",
+      "expected_page": 3,
+      "expected_evidence": "效用（utility）、社交性（sociability）、价值观（values）和持续进化能力（ability to continually evolve）",
+      "notes": "检验对评估维度的语义检索。"
+    },
+    {
+      "id": "agent_no_001",
+      "category": "no_answer",
+      "query": "这篇文章推荐使用哪个 Python 开源框架来开发 AI Agent？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "给出的三页文本未提及具体 Python 开源开发框架，人工检查是否误召回。"
+    },
+    {
+      "id": "agent_no_002",
+      "category": "no_answer",
+      "query": "本文使用了多少条训练数据来训练 LLM-based Agent？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "给出的三页文本未提供训练数据数量，人工检查是否误召回。"
+    },
+    {
+      "id": "agent_weak_001",
+      "category": "weak_related",
+      "query": "Agent 的视觉感知模块具体采用了哪个图像识别模型？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "第 1 页提到视觉等感知模态，但没有给出具体图像识别模型。"
+    },
+    {
+      "id": "agent_weak_002",
+      "category": "weak_related",
+      "query": "LLM-based Agent 的动态扩展具体采用什么调度算法？",
+      "expected_source": null,
+      "expected_page": null,
+      "expected_evidence": null,
+      "notes": "第 3 页提到动态扩展，但给出的文本没有提供具体调度算法。"
+    }
+  ]
+}

@@ -1,21 +1,138 @@
-import sqlite3
+"""
+业务库连接层（MySQL 8.x + SQLAlchemy 2.x Core）。
+
+本模块只负责 Engine / Connection 生命周期，不执行建表或数据迁移。
+Repository 尚未全部改造前，请勿假设旧的 sqlite3 风格 get_db() 仍可用。
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Connection, Engine, URL
 
-# backend/
+
+# backend/ 根目录（用于定位 .env，不依赖进程 cwd）
 BASE_DIR = Path(__file__).resolve().parent.parent
+_ENV_PATH = BASE_DIR / ".env"
 
-# backend/database/ai_assistant.db
-DATABASE_PATH = BASE_DIR / "database" / "ai_assistant.db"
+# 进程内单例 Engine；首次 get_engine() 时创建
+_engine: Engine | None = None
+
+
+def _load_mysql_settings() -> dict[str, str | int]:
+    """从 backend/.env 读取 MySQL 配置（不打印密码）。"""
+
+    load_dotenv(_ENV_PATH)
+
+    host = os.getenv("MYSQL_HOST", "127.0.0.1")
+    port_raw = os.getenv("MYSQL_PORT", "3307")
+    user = os.getenv("MYSQL_USER")
+    password = os.getenv("MYSQL_PASSWORD")
+    database = os.getenv("MYSQL_DATABASE", "ai_assistant")
+
+    if not user:
+        raise ValueError("缺少环境变量 MYSQL_USER，请检查 backend/.env")
+    if password is None or password == "":
+        raise ValueError("缺少环境变量 MYSQL_PASSWORD，请检查 backend/.env")
+
+    try:
+        port = int(port_raw)
+    except ValueError as exc:
+        raise ValueError(f"MYSQL_PORT 无效：{port_raw!r}") from exc
+
+    return {
+        "host": host,
+        "port": port,
+        "user": user,
+        "password": password,
+        "database": database,
+    }
+
+
+def _build_database_url() -> URL:
+    """使用 URL.create 构建连接串，避免密码特殊字符破坏 URL。"""
+
+    settings = _load_mysql_settings()
+    return URL.create(
+        drivername="mysql+pymysql",
+        username=str(settings["user"]),
+        password=str(settings["password"]),
+        host=str(settings["host"]),
+        port=int(settings["port"]),
+        database=str(settings["database"]),
+        query={"charset": "utf8mb4"},
+    )
+
+
+def get_engine() -> Engine:
+    """
+    获取全局 SQLAlchemy Engine（懒加载单例）。
+
+    Engine 管理连接池；不要在每次请求里 create_engine。
+    创建 Engine 本身不会执行破坏性 DDL/DML。
+    """
+
+    global _engine
+    if _engine is not None:
+        return _engine
+
+    _engine = create_engine(
+        _build_database_url(),
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=3600,
+        echo=False,
+    )
+    return _engine
+
+
+@contextmanager
+def get_connection() -> Iterator[Connection]:
+    """
+    从连接池借出一条 SQLAlchemy Connection，并在退出 with 时归还。
+
+    用法：
+        with get_connection() as conn:
+            conn.execute(text("SELECT 1"), {})
+            conn.commit()   # 写操作需显式提交（SQLAlchemy 2 默认不自动 commit）
+
+    注意：不会在退出时自动 commit；异常时也不会替你 rollback 写事务。
+    需要事务时优先使用 get_engine().begin()。
+    """
+
+    connection = get_engine().connect()
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+
+def dispose_engine() -> None:
+    """释放 Engine 与连接池（应用关闭时可选调用）。"""
+
+    global _engine
+    if _engine is not None:
+        _engine.dispose()
+        _engine = None
 
 
 def get_db():
-    # 确保 database 目录存在（首次启动 / 临时测试库父目录）
-    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    """
+    已废弃：原 sqlite3 连接入口。
 
-    connection = sqlite3.connect(DATABASE_PATH)
+    旧 Repository 仍 import 此名时会在调用时报错，避免误连 SQLite。
+    请改为 get_engine() / get_connection()，并用 text() 执行 SQL。
+    """
 
-    # 查询结果可以通过字段名访问
-    connection.row_factory = sqlite3.Row
-
-    return connection
+    raise RuntimeError(
+        "get_db() 已移除 SQLite 实现。业务库请使用 "
+        "app.database.get_engine() 或 get_connection()，"
+        "并同步将 Repository 改为 SQLAlchemy Core（text + 命名参数）。"
+    )
