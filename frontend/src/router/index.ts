@@ -14,6 +14,10 @@ const router = createRouter({
       path: '/login',
       component: () => import('@/views/Login.vue'),
     },
+    {
+      path: '/register',
+      component: () => import('@/views/Register.vue'),
+    },
 
     {
       path: '/home',
@@ -49,8 +53,11 @@ router.beforeEach((to) => {
     return '/login'
   }
 
-  // ② 已经登录，却访问登录页
-  if (to.path === '/login' && userStore.isLogin) {
+  // ② 已经登录，却访问登录页或注册页
+  if (
+    (to.path === '/login' || to.path === '/register') &&
+    userStore.isLogin
+  ) {
     return '/chat'
   }
 
